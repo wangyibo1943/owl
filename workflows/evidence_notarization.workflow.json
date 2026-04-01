@@ -15,21 +15,11 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto'); const payload = $json.body ?? {}; const buffer = Buffer.from(payload.file_content_base64 ?? '', 'base64'); const hash = crypto.createHash('sha256').update(buffer).digest('hex'); return [{ ...payload, file_hash: `sha256:${hash}` }];"
-      },
-      "id": "hash_file",
-      "name": "Hash File",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [500, 240]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "={{$env.NOTARIZATION_API_URL}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"evidence_id\":\"{{$json.evidence_id}}\",\"file_hash\":\"{{$json.file_hash}}\",\"filename\":\"{{$json.filename}}\",\"mime_type\":\"{{$json.mime_type}}\"}"
+        "jsonBody": "={\"evidence_id\":\"{{$json.body.evidence_id}}\",\"file_hash\":\"{{$json.body.file_hash}}\",\"filename\":\"{{$json.body.filename}}\",\"mime_type\":\"{{$json.body.mime_type}}\"}"
       },
       "id": "call_notarization_api",
       "name": "Call Notarization API",
@@ -65,9 +55,6 @@
   ],
   "connections": {
     "Evidence Webhook": {
-      "main": [[{ "node": "Hash File", "type": "main", "index": 0 }]]
-    },
-    "Hash File": {
       "main": [[{ "node": "Call Notarization API", "type": "main", "index": 0 }]]
     },
     "Call Notarization API": {

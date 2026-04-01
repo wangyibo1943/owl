@@ -248,9 +248,10 @@ export class EvidenceService {
     triggered: boolean;
     status: string;
   }> {
-    const webhookBaseUrl = process.env.N8N_WEBHOOK_BASE_URL;
+    const explicitWebhookUrl = process.env.N8N_EVIDENCE_WEBHOOK_URL?.trim();
+    const webhookBaseUrl = process.env.N8N_WEBHOOK_BASE_URL?.trim();
 
-    if (!webhookBaseUrl) {
+    if (!explicitWebhookUrl && !webhookBaseUrl) {
       await this.supabaseService.update(
         'evidence_records',
         { id: payload.evidence_id },
@@ -268,10 +269,14 @@ export class EvidenceService {
       };
     }
 
-    const webhookUrl = new URL(
-      'tradeguard-evidence-notarization',
-      webhookBaseUrl.endsWith('/') ? webhookBaseUrl : `${webhookBaseUrl}/`,
-    );
+    const webhookUrl = explicitWebhookUrl
+      ? new URL(explicitWebhookUrl)
+      : new URL(
+          'tradeguard-evidence-notarization',
+          webhookBaseUrl!.endsWith('/')
+            ? webhookBaseUrl
+            : `${webhookBaseUrl!}/`,
+        );
 
     try {
       const response = await fetch(webhookUrl, {
