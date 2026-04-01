@@ -29,13 +29,27 @@
         "url": "={{$env.NOTARIZATION_API_URL}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"file_hash\":\"{{$json.file_hash}}\",\"filename\":\"{{$json.filename}}\"}"
+        "jsonBody": "={\"evidence_id\":\"{{$json.evidence_id}}\",\"file_hash\":\"{{$json.file_hash}}\",\"filename\":\"{{$json.filename}}\",\"mime_type\":\"{{$json.mime_type}}\"}"
       },
       "id": "call_notarization_api",
       "name": "Call Notarization API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [780, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.TRADEGUARD_API_BASE_URL}}/v1/evidence/{{$node[\"Evidence Webhook\"].json.body.evidence_id}}/notarization-result",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { provider_name: $json.provider_name || 'ConfiguredNotarizationProvider', provider_certificate_id: $json.certificate_id || $json.id || undefined, certificate_url: $json.certificate_url || $json.url || undefined, status: $json.status || 'COMPLETED', provider_payload: $json } }}"
+      },
+      "id": "persist_notarization_result",
+      "name": "Persist Notarization Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, 240]
     },
     {
       "parameters": {
@@ -46,7 +60,7 @@
       "name": "Respond Notarization",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1040, 240]
+      "position": [1300, 240]
     }
   ],
   "connections": {
@@ -57,8 +71,10 @@
       "main": [[{ "node": "Call Notarization API", "type": "main", "index": 0 }]]
     },
     "Call Notarization API": {
+      "main": [[{ "node": "Persist Notarization Result", "type": "main", "index": 0 }]]
+    },
+    "Persist Notarization Result": {
       "main": [[{ "node": "Respond Notarization", "type": "main", "index": 0 }]]
     }
   }
 }
-

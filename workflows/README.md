@@ -12,3 +12,7 @@ Recommended order:
 2. evidence notarization
 3. notification
 
+Required environment variables for the notarization workflow:
+
+- `NOTARIZATION_API_URL`
+- `TRADEGUARD_API_BASE_URL`

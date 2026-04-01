@@ -115,6 +115,38 @@ Success:
 }
 ```
 
+## 5. Internal Notarization Callback
+
+### `POST /evidence/:evidenceId/notarization-result`
+
+Internal request body for n8n or trusted automation:
+
+```json
+{
+  "provider_name": "ConfiguredNotarizationProvider",
+  "provider_certificate_id": "cert_456",
+  "certificate_url": "https://provider.example/cert/456",
+  "status": "COMPLETED",
+  "provider_payload": {
+    "raw_status": "ok"
+  }
+}
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "evidence_id": "evd_123",
+    "status": "COMPLETED",
+    "certificate_id": "cert_456",
+    "certificate_url": "https://provider.example/cert/456"
+  }
+}
+```
+
 ## Error Codes
 
 - `COMPANY_NOT_FOUND`

@@ -34,12 +34,14 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Supabase lookup persistence infrastructure is implemented
 - Evidence upload persistence and n8n trigger structure are implemented
 - Certificate status route can read stored records from Supabase
+- Internal notarization callback route is implemented for workflow result persistence
 
 ### Partially Completed
 
 - Credit lookup API route is wired to OpenCorporates and first-pass grading rules
 - Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
+- n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
 - Flutter app screens exist as a manual skeleton, not a generated Flutter project
 
 ### Not Started
@@ -102,6 +104,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - mobile app has not been compiled
 - backend requires real external credentials before full runtime use
 - workflows are drafts and have not been imported into n8n
+- workflow callback contract exists, but has not been exercised against a live n8n instance
 
 ## Build and Run Notes
 
@@ -185,13 +188,14 @@ Impact:
 Action:
 
 - Import into n8n and replace placeholders with real endpoints and credentials
+- Verify provider response mapping into the callback payload
 
 ## Recommended Next Build Order
 
 1. Connect backend credit lookup to OpenCorporates
 2. Strengthen deterministic credit grading rules
 3. Add file storage path for evidence binaries
-4. Connect n8n workflow to real provider and certificate persistence
+4. Connect n8n workflow to real provider and verify certificate callback persistence
 5. Add certificate result polling or webhook callback completion
 6. Generate and wire full Flutter project
 
@@ -236,3 +240,4 @@ The repo can be considered demo-ready when all of the following are true:
 - credit lookup connected to OpenCorporates request flow
 - lookup logging infrastructure added for Supabase
 - evidence upload connected to Supabase metadata persistence and n8n trigger path
+- notarization result callback route added for certificate persistence

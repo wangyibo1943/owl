@@ -7,6 +7,7 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { SupabaseService } from '../database/supabase.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
+import { RecordNotarizationResultDto } from './dto/record-notarization-result.dto';
 
 type EvidenceRecord = {
   id: string;
@@ -137,6 +138,83 @@ export class EvidenceService {
         certificate_id: certificate.provider_certificate_id ?? certificate.id,
         certificate_url: certificate.certificate_url,
         status: certificate.status,
+      },
+    };
+  }
+
+  async recordNotarizationResult(
+    evidenceId: string,
+    payload: RecordNotarizationResultDto,
+  ) {
+    const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
+      'evidence_records',
+      {
+        id: evidenceId,
+      },
+    );
+
+    if (!evidence) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'EVIDENCE_NOT_FOUND',
+        message: 'Evidence record was not found',
+      });
+    }
+
+    const normalizedStatus = payload.status.trim().toUpperCase();
+    const existingCertificate =
+      await this.supabaseService.findFirst<NotarizationCertificateRecord>(
+        'notarization_certificates',
+        {
+          evidence_id: evidenceId,
+        },
+        {
+          orderBy: 'created_at',
+          ascending: false,
+        },
+      );
+
+    const certificatePayload = {
+      evidence_id: evidenceId,
+      provider_name: payload.provider_name.trim(),
+      provider_certificate_id: payload.provider_certificate_id?.trim() || null,
+      certificate_url: payload.certificate_url?.trim() || null,
+      provider_payload: payload.provider_payload ?? null,
+      status: normalizedStatus,
+    };
+
+    if (existingCertificate) {
+      await this.supabaseService.update(
+        'notarization_certificates',
+        { id: existingCertificate.id },
+        certificatePayload,
+      );
+    } else {
+      await this.supabaseService.insert(
+        'notarization_certificates',
+        certificatePayload,
+      );
+    }
+
+    await this.supabaseService.update(
+      'evidence_records',
+      { id: evidenceId },
+      { status: normalizedStatus },
+    );
+
+    await this.logWorkflow({
+      reference_id: evidenceId,
+      status: 'RESULT_RECORDED',
+      payload: certificatePayload,
+    });
+
+    return {
+      success: true,
+      data: {
+        evidence_id: evidenceId,
+        status: normalizedStatus,
+        certificate_id: certificatePayload.provider_certificate_id,
+        certificate_url: certificatePayload.certificate_url,
       },
     };
   }

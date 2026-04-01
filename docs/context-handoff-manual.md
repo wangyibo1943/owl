@@ -112,7 +112,10 @@ Why:
 
 - Nest app bootstrapped manually
 - `health`, `credit`, and `evidence` modules exist
-- placeholder service responses exist
+- credit lookup calls OpenCorporates structure and logs to Supabase when configured
+- evidence upload stores metadata and triggers n8n when configured
+- certificate query reads stored certificate state
+- internal callback route exists for notarization result persistence
 
 ### Mobile Skeleton
 
@@ -217,7 +220,7 @@ Store:
 2. Read [tradeguard-api-contract.md](/Users/leo/owl/docs/tradeguard-api-contract.md)
 3. Read [engineering-progress-manual.md](/Users/leo/owl/docs/engineering-progress-manual.md)
 4. Run backend locally
-5. Replace placeholder credit logic with real provider logic
+5. Configure OpenCorporates and Supabase credentials
 6. Set up Supabase
 7. Import n8n workflows
 8. Then generate the Flutter app structure
@@ -230,6 +233,7 @@ The following values will be needed before the repo becomes fully functional:
 - Supabase URL
 - Supabase service role key
 - n8n base URL
+- TradeGuard API base URL for n8n callback
 - notarization provider API endpoint
 - notification email sender setup
 
@@ -241,7 +245,7 @@ The current mobile code is a skeleton, not a fully generated Flutter app.
 
 ### Limitation 2
 
-The current backend uses placeholder responses.
+The backend flow is real in structure, but still depends on live credentials and provider wiring.
 
 ### Limitation 3
 
@@ -258,10 +262,8 @@ If you are taking over this project, assume the following:
 
 ## Immediate Next Tasks
 
-1. Build real OpenCorporates lookup in backend
-2. Persist lookup results to Supabase
-3. Implement evidence file storage path
-4. Trigger notarization workflow from backend
-5. Return certificate status from stored records
-6. Generate and connect full Flutter app
-
+1. Add real file object storage for uploaded evidence
+2. Import n8n workflows and wire provider credentials
+3. Verify notarization callback writes certificates correctly
+4. Add notification completion flow
+5. Generate and connect full Flutter app
