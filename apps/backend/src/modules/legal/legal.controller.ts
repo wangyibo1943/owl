@@ -15,4 +15,9 @@ export class LegalController {
   getTrigger(@Param('triggerId') triggerId: string) {
     return this.legalService.getTrigger(triggerId);
   }
+
+  @Post('triggers/:triggerId/demand-letter')
+  generateDemandLetter(@Param('triggerId') triggerId: string) {
+    return this.legalService.generateDemandLetter(triggerId);
+  }
 }

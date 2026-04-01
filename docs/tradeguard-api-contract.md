@@ -301,6 +301,26 @@ Success:
 }
 ```
 
+### `POST /legal/triggers/:triggerId/demand-letter`
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "legal_trigger_id": "ltr_789",
+    "evidence_id": "evd_123",
+    "demand_letter_id": "dml_001",
+    "demand_letter_status": "GENERATED",
+    "review_status": "DRAFT",
+    "draft_text": "Subject: Formal Demand for Payment and Preservation of Rights\n\nTo: Buyer LLC\nFrom: Shenzhen Acme Trading Co., Ltd.\n...",
+    "export_url": null,
+    "created_at": "2026-04-01T20:40:00Z"
+  }
+}
+```
+
 ## Error Codes
 
 - `COMPANY_NOT_FOUND`
@@ -317,3 +337,4 @@ Success:
 - `ANCHOR_NOT_READY`
 - `LEGAL_TRIGGER_NOT_FOUND`
 - `LEGAL_TRIGGER_CREATE_FAILED`
+- `DEMAND_LETTER_CREATE_FAILED`

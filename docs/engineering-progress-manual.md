@@ -37,6 +37,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Internal notarization callback route is implemented for workflow result persistence
 - Blockchain anchor API skeleton is implemented
 - Legal trigger API skeleton is implemented
+- Demand letter draft API skeleton is implemented
 
 ### Partially Completed
 
@@ -45,6 +46,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
 - Blockchain anchor route persists a first-pass anchor record, but still uses a mock anchor provider
 - Legal trigger route persists first-pass case intake state, but does not yet generate demand letters or evidence bundles
+- Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
 - Flutter app screens exist as a manual skeleton, not a generated Flutter project
 
@@ -56,7 +58,6 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Real notarization provider integration
 - Real notification delivery
 - Blockchain anchoring implementation
-- Demand letter generation
 - Evidence bundle generation
 - Lawyer handoff connector
 - Authentication
@@ -108,6 +109,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - certificate route can return stored status instead of placeholder data
 - blockchain anchor route can persist and read stored anchor state when schema is present
 - legal trigger route can persist and read stored intake state when schema is present
+- demand letter route can generate and read stored draft state when schema is present
 - backend is deployed on the server and health endpoint responds from `wehom.net`
 - anchor route has been exercised against live Supabase with a completed evidence record
 
@@ -119,6 +121,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - workflows are drafts and have not been imported into n8n
 - workflow callback contract exists, but has not been exercised against a live n8n instance
 - legal trigger workflow steps after intake are not implemented yet
+- demand letter export artifacts are not implemented yet
 - live Supabase still needs the latest `legal_triggers` table migration before `/v1/legal/trigger` can persist records
 
 ## Build and Run Notes
@@ -214,8 +217,9 @@ Action:
 5. Add certificate result polling or webhook callback completion
 6. Add blockchain anchor after notarization
 7. Add legal trigger intake and state transitions
-8. Generate demand letter and evidence bundle
-9. Generate and wire full Flutter project
+8. Generate evidence bundle
+9. Add lawyer handoff connector
+10. Generate and wire full Flutter project
 
 ## Definition of “Ready for Demo”
 
@@ -263,4 +267,5 @@ The repo can be considered demo-ready when all of the following are true:
 - litigation trigger module documented for the next product phase
 - blockchain anchor API skeleton added
 - legal trigger intake API skeleton added
+- demand letter draft API skeleton added
 - live server deployment updated with anchor and legal trigger routes

@@ -56,6 +56,16 @@ type LegalTriggerRecord = {
   created_at: string;
 };
 
+type DemandLetterRecord = {
+  id: string;
+  legal_trigger_id: string;
+  draft_text: string;
+  export_url: string | null;
+  review_status: string;
+  provider_payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
 @Injectable()
 export class LegalService {
   constructor(private readonly supabaseService: SupabaseService) {}
@@ -225,6 +235,126 @@ export class LegalService {
     };
   }
 
+  async generateDemandLetter(triggerId: string) {
+    const trigger = await this.supabaseService.findFirst<LegalTriggerRecord>(
+      'legal_triggers',
+      {
+        id: triggerId,
+      },
+    );
+
+    if (!trigger) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'LEGAL_TRIGGER_NOT_FOUND',
+        message: 'Legal trigger record was not found',
+      });
+    }
+
+    const existingDraft = await this.supabaseService.findFirst<DemandLetterRecord>(
+      'demand_letters',
+      {
+        legal_trigger_id: triggerId,
+      },
+      {
+        orderBy: 'created_at',
+        ascending: false,
+      },
+    );
+
+    if (existingDraft) {
+      return {
+        success: true,
+        data: this.mapDemandLetterResponse(existingDraft, trigger),
+      };
+    }
+
+    const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
+      'evidence_records',
+      {
+        id: trigger.evidence_id,
+      },
+    );
+
+    const anchor = trigger.anchor_id
+      ? await this.supabaseService.findFirst<BlockchainAnchorRecord>(
+          'blockchain_anchors',
+          {
+            id: trigger.anchor_id,
+          },
+        )
+      : null;
+
+    const certificate =
+      await this.supabaseService.findFirst<NotarizationCertificateRecord>(
+        'notarization_certificates',
+        {
+          evidence_id: trigger.evidence_id,
+        },
+        {
+          orderBy: 'created_at',
+          ascending: false,
+        },
+      );
+
+    const draftText = this.buildDemandLetterDraft({
+      trigger,
+      evidence,
+      anchor,
+      certificate,
+    });
+
+    const inserted = await this.supabaseService.insert<DemandLetterRecord>(
+      'demand_letters',
+      {
+        legal_trigger_id: triggerId,
+        draft_text: draftText,
+        export_url: null,
+        review_status: 'DRAFT',
+        provider_payload: {
+          generator: 'TradeGuardTemplateEngine',
+          evidence_id: trigger.evidence_id,
+          anchor_id: trigger.anchor_id,
+        },
+      },
+    );
+
+    if (!inserted) {
+      throw new InternalServerErrorException({
+        success: false,
+        error_code: 'DEMAND_LETTER_CREATE_FAILED',
+        message: 'Demand letter draft could not be created',
+      });
+    }
+
+    await this.supabaseService.update(
+      'legal_triggers',
+      { id: triggerId },
+      {
+        demand_letter_status: 'GENERATED',
+      },
+    );
+
+    await this.supabaseService.insert('workflow_logs', {
+      workflow_name: 'TradeGuard_Demand_Letter',
+      reference_id: triggerId,
+      status: 'GENERATED',
+      payload: {
+        legal_trigger_id: triggerId,
+        demand_letter_id: inserted.id,
+        review_status: inserted.review_status,
+      },
+    });
+
+    return {
+      success: true,
+      data: this.mapDemandLetterResponse(inserted, {
+        ...trigger,
+        demand_letter_status: 'GENERATED',
+      }),
+    };
+  }
+
   private mapTriggerResponse(trigger: LegalTriggerRecord) {
     return {
       legal_trigger_id: trigger.id,
@@ -246,5 +376,68 @@ export class LegalService {
       lawyer_contact: trigger.lawyer_contact,
       created_at: trigger.created_at,
     };
+  }
+
+  private mapDemandLetterResponse(
+    letter: DemandLetterRecord,
+    trigger: Pick<
+      LegalTriggerRecord,
+      'id' | 'evidence_id' | 'demand_letter_status'
+    >,
+  ) {
+    return {
+      legal_trigger_id: trigger.id,
+      evidence_id: trigger.evidence_id,
+      demand_letter_id: letter.id,
+      demand_letter_status: trigger.demand_letter_status,
+      review_status: letter.review_status,
+      draft_text: letter.draft_text,
+      export_url: letter.export_url,
+      created_at: letter.created_at,
+    };
+  }
+
+  private buildDemandLetterDraft(input: {
+    trigger: LegalTriggerRecord;
+    evidence: EvidenceRecord | null;
+    anchor: BlockchainAnchorRecord | null;
+    certificate: NotarizationCertificateRecord | null;
+  }) {
+    const { trigger, evidence, anchor, certificate } = input;
+    const amountLine =
+      trigger.amount_in_dispute != null
+        ? `${trigger.currency ?? 'USD'} ${trigger.amount_in_dispute}`
+        : 'an amount to be confirmed';
+    const evidenceFilename = evidence?.filename ?? 'the preserved evidence file';
+    const certificateLine = certificate?.certificate_url
+      ? `Notarization certificate: ${certificate.certificate_url}`
+      : 'Notarization certificate is on file with TradeGuard.';
+    const anchorLine = anchor?.transaction_hash
+      ? `Blockchain anchor transaction: ${anchor.transaction_hash}`
+      : 'Blockchain anchor reference is on file with TradeGuard.';
+
+    return [
+      `Subject: Formal Demand for Payment and Preservation of Rights`,
+      ``,
+      `To: ${trigger.buyer_name}`,
+      `From: ${trigger.seller_name}`,
+      ``,
+      `This letter serves as a formal demand regarding an outstanding commercial dispute in the amount of ${amountLine}.`,
+      ``,
+      `Summary of breach: ${trigger.breach_summary}`,
+      ``,
+      `TradeGuard case references:`,
+      `- Legal trigger ID: ${trigger.id}`,
+      `- Evidence ID: ${trigger.evidence_id}`,
+      `- Evidence file: ${evidenceFilename}`,
+      `- ${certificateLine}`,
+      `- ${anchorLine}`,
+      ``,
+      `You are hereby requested to cure the above breach, including payment of all outstanding amounts, within 7 calendar days of receipt of this letter.`,
+      ``,
+      `If this matter is not resolved promptly, the sender reserves all rights to escalate the dispute, including engagement of US counsel and further legal action without additional notice.`,
+      ``,
+      `This draft is generated by TradeGuard for intake and review purposes only and should be reviewed by qualified counsel before formal service.`,
+    ].join('\n');
   }
 }
