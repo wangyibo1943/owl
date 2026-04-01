@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { EvidenceService } from './evidence.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
@@ -60,6 +60,44 @@ export class EvidenceController {
   @Post('providers/adobe-sign/sync-pending')
   syncPendingAdobeSignNotarizations() {
     return this.evidenceService.syncPendingAdobeSignNotarizations();
+  }
+
+  @Get('providers/adobe-sign/webhook')
+  verifyAdobeSignWebhook(
+    @Headers('x-adobesign-clientid') clientIdHeader: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const echoedClientId =
+      clientIdHeader?.trim() ||
+      process.env.ADOBE_SIGN_WEBHOOK_CLIENT_ID?.trim() ||
+      null;
+
+    if (echoedClientId) {
+      res.setHeader('X-AdobeSign-ClientId', echoedClientId);
+    }
+
+    return {
+      success: true,
+      xAdobeSignClientId: echoedClientId,
+    };
+  }
+
+  @Post('providers/adobe-sign/webhook')
+  async handleAdobeSignWebhook(
+    @Body() payload: Record<string, unknown>,
+    @Headers('x-adobesign-clientid') clientIdHeader: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const echoedClientId =
+      clientIdHeader?.trim() ||
+      process.env.ADOBE_SIGN_WEBHOOK_CLIENT_ID?.trim() ||
+      null;
+
+    if (echoedClientId) {
+      res.setHeader('X-AdobeSign-ClientId', echoedClientId);
+    }
+
+    return this.evidenceService.handleAdobeSignWebhook(payload, echoedClientId);
   }
 
   @Post(':evidenceId/providers/adobe-sign/sync')

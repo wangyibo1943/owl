@@ -158,6 +158,35 @@ Returns a provider-shaped payload that n8n can pass into `/evidence/:evidenceId/
 
 Internal sync endpoint that refreshes Adobe Sign agreement status and writes it back into certificate state.
 
+### `GET /evidence/providers/adobe-sign/webhook`
+
+Adobe Sign webhook verification endpoint. It echoes `X-AdobeSign-ClientId` in the response header and body when provided by Adobe during webhook registration.
+
+### `POST /evidence/providers/adobe-sign/webhook`
+
+Adobe Sign webhook ingestion endpoint. Current behavior:
+
+- accepts Adobe webhook JSON payloads
+- extracts the agreement id
+- fetches the latest agreement state from Adobe
+- writes the normalized status back into `notarization_certificates`
+
+Example response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "accepted": true,
+    "matched": true,
+    "agreement_id": "CBJCHBCAABAA...",
+    "evidence_id": "evd_123",
+    "status": "IN_PROGRESS",
+    "xAdobeSignClientId": "tradeguard-test-client"
+  }
+}
+```
+
 ## 5. Internal Notarization Callback
 
 ### `POST /evidence/:evidenceId/notarization-result`
@@ -389,6 +418,8 @@ Downloads a real ZIP archive containing:
 - `README.txt`
 - `manifest.json`
 - `demand-letter.txt` when a demand letter exists
+
+Current implementation stores newly generated bundles in object storage and preserves legacy local bundle downloads for older records.
 
 ### `POST /legal/triggers/:triggerId/handoff`
 

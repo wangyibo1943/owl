@@ -39,7 +39,13 @@ export class LegalController {
   ) {
     const bundle = await this.legalService.getEvidenceBundleDownload(triggerId);
 
-    return res.download(bundle.file_path, bundle.file_name);
+    res.setHeader('Content-Type', bundle.content_type);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${bundle.file_name}"`,
+    );
+
+    return res.send(bundle.content);
   }
 
   @Post('triggers/:triggerId/handoff')

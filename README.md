@@ -67,13 +67,15 @@ Create environment files from:
 - `GET /v1/evidence/:evidenceId/certificate` now returns stored certificate state when available
 - `GET /v1/evidence/:evidenceId/certificate/download` now downloads the stored notarization certificate as an attachment
 - `POST /v1/evidence/providers/adobe-sign/sync-pending` now supports batch Adobe Sign refreshes for server-side polling
+- `GET /v1/evidence/providers/adobe-sign/webhook` now supports Adobe Sign webhook verification
+- `POST /v1/evidence/providers/adobe-sign/webhook` now supports Adobe Sign webhook-driven status refresh
 - `POST /v1/evidence/:evidenceId/anchor` now creates a first-pass blockchain anchor record after certificate completion
 - `GET /v1/evidence/:evidenceId/anchor` now returns stored anchor state when available
 - `POST /v1/legal/trigger` now creates a first-pass legal intake record after evidence notarization and anchoring
 - `GET /v1/legal/triggers/:triggerId` now returns stored legal trigger state when available
 - `POST /v1/legal/triggers/:triggerId/demand-letter` now generates and stores a first-pass demand letter draft
 - `POST /v1/legal/triggers/:triggerId/bundle` now generates and stores a first-pass evidence bundle manifest
-- `GET /v1/legal/triggers/:triggerId/bundle/download` now downloads a real ZIP archive for the legal bundle
+- `GET /v1/legal/triggers/:triggerId/bundle/download` now downloads a ZIP archive backed by object storage with legacy local fallback
 - `POST /v1/legal/triggers/:triggerId/handoff` now prepares a first-pass lawyer handoff packet
 
 ## Key Docs

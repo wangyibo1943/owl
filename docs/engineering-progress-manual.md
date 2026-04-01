@@ -37,6 +37,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Certificate status route can read stored records from Supabase
 - Certificate download route can proxy the stored provider certificate URL
 - Adobe Sign provider adapter routes are implemented in the backend
+- Adobe Sign webhook verification and ingestion routes are implemented in the backend
 - Uploaded evidence files are now written to Supabase Storage object storage
 - Internal notarization callback route is implemented for workflow result persistence
 - Blockchain anchor API skeleton is implemented
@@ -60,7 +61,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Blockchain anchor route persists a first-pass anchor record, but still uses a mock anchor provider
 - Legal trigger route persists first-pass case intake state, but still depends on follow-up generation endpoints for a complete dispute package
 - Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
-- Evidence bundle route now generates a real ZIP package, but the archive is still stored on the app server
+- Evidence bundle route now generates a real ZIP package and stores newly generated archives in object storage with legacy local fallback
 - Lawyer handoff route prepares a structured handoff packet, but does not yet send it to an external law firm system
 - Bundle download route now exports a real ZIP artifact, but it is still a local server-side archive rather than object storage delivery
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
@@ -122,6 +123,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - certificate route can return stored status instead of placeholder data
 - certificate download route can return the provider certificate file as an attachment
 - pending Adobe agreements can be batch-synced with the backend sync endpoint
+- Adobe webhook verification and ingestion routes respond correctly over HTTPS
 - blockchain anchor route can persist and read stored anchor state when schema is present
 - legal trigger route can persist and read stored intake state when schema is present
 - demand letter route can generate and read stored draft state when schema is present
@@ -136,7 +138,6 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - legal trigger workflow steps after intake are not implemented yet
 - demand letter export artifacts are not implemented yet
 - lawyer handoff is not connected to a real external intake or email delivery system yet
-- generated bundle files are stored on the app server and not yet mirrored to object storage
 
 ## Build and Run Notes
 
@@ -205,28 +206,26 @@ Impact:
 
 Action:
 
-- Add webhook-based completion or stronger dashboard monitoring on top of the existing sync timer
+- Add webhook signature verification or stronger dashboard monitoring on top of the current webhook plus sync timer setup
 
-### Risk 4: Generated Legal Artifacts Still Use Server-Side Storage
+### Risk 4: California Private-Company Coverage Is Still Narrow
 
 Impact:
 
-- ZIP bundles and other generated legal artifacts are still served from the app server instead of durable object storage or CDN delivery.
+- SEC plus GLEIF covers many entities, but the product still needs a stronger official private-company source mix for broader US coverage.
 
 Action:
 
-- Move generated legal artifacts to object storage and serve them with signed URLs or CDN-backed downloads
+- Add California SOS credentials and decide the next compliant official state source
 
 ## Recommended Next Build Order
 
 1. Verify California SOS key with the new provider router
 2. Strengthen deterministic credit grading rules
 3. Expand compliant private-company source coverage beyond the current SEC, GLEIF, and optional California mix
-4. Add webhook-based Adobe completion on top of the existing sync timer
-5. Improve California, SEC, and GLEIF confidence rules
-6. Replace placeholder demand letter export with PDF or DOCX
-7. Move generated bundle artifacts to object storage
-8. Polish mobile UX for production release
+4. Improve California, SEC, and GLEIF confidence rules
+5. Replace placeholder demand letter export with PDF or DOCX
+6. Polish mobile UX for production release
 
 ## Definition of “Ready for Demo”
 

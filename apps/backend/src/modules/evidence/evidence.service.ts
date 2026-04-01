@@ -49,6 +49,16 @@ type EvidenceDownloadResult = {
   file_name: string;
 };
 
+type AdobeWebhookMatch = {
+  id: string;
+  evidence_id: string;
+  provider_name: string;
+  provider_certificate_id: string | null;
+  provider_payload: Record<string, unknown> | null;
+  status: string;
+  created_at: string;
+};
+
 @Injectable()
 export class EvidenceService {
   private readonly logger = new Logger(EvidenceService.name);
@@ -330,6 +340,89 @@ export class EvidenceService {
     };
   }
 
+  async handleAdobeSignWebhook(
+    payload: Record<string, unknown>,
+    echoedClientId: string | null,
+  ) {
+    const agreementId = this.extractAdobeAgreementId(payload);
+    const eventName = this.extractAdobeEventName(payload);
+
+    if (!agreementId) {
+      return {
+        success: true,
+        data: {
+          accepted: true,
+          matched: false,
+          reason: 'AGREEMENT_ID_NOT_FOUND',
+          event_name: eventName,
+          xAdobeSignClientId: echoedClientId,
+        },
+      };
+    }
+
+    const certificate = await this.supabaseService.findFirst<AdobeWebhookMatch>(
+      'notarization_certificates',
+      {
+        provider_certificate_id: agreementId,
+      },
+      {
+        orderBy: 'created_at',
+        ascending: false,
+      },
+    );
+
+    if (!certificate) {
+      return {
+        success: true,
+        data: {
+          accepted: true,
+          matched: false,
+          agreement_id: agreementId,
+          event_name: eventName,
+          reason: 'CERTIFICATE_NOT_FOUND',
+          xAdobeSignClientId: echoedClientId,
+        },
+      };
+    }
+
+    const agreement = await this.adobeSignService.getAgreement(agreementId);
+    const agreementStatus =
+      typeof agreement.status === 'string'
+        ? agreement.status
+        : this.extractAdobeAgreementStatus(payload) || 'IN_PROCESS';
+    const normalizedStatus =
+      this.adobeSignService.mapAgreementStatus(agreementStatus);
+
+    const result = await this.recordNotarizationResult(certificate.evidence_id, {
+      provider_name: 'Adobe Acrobat Sign',
+      provider_certificate_id: agreementId,
+      certificate_url: this.buildCertificateDownloadUrl(certificate.evidence_id),
+      status: normalizedStatus,
+      provider_payload: {
+        ...(certificate.provider_payload ?? {}),
+        agreement_id: agreementId,
+        agreement_status: agreementStatus,
+        webhook_event: eventName,
+        webhook_payload: payload,
+        adobe_payload: agreement,
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        ...result.data,
+        accepted: true,
+        matched: true,
+        agreement_id: agreementId,
+        evidence_id: certificate.evidence_id,
+        event_name: eventName,
+        status: normalizedStatus,
+        xAdobeSignClientId: echoedClientId,
+      },
+    };
+  }
+
   async downloadCertificate(evidenceId: string): Promise<CertificateDownloadResult> {
     const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
       'evidence_records',
@@ -531,6 +624,55 @@ export class EvidenceService {
 
   private buildCertificateDownloadUrl(evidenceId: string) {
     return `${this.getApiBaseUrl()}/v1/evidence/${evidenceId}/certificate/download`;
+  }
+
+  private extractAdobeAgreementId(payload: Record<string, unknown>) {
+    return (
+      this.pickNestedString(payload, ['agreement', 'id']) ||
+      this.pickNestedString(payload, ['agreement', 'agreementId']) ||
+      this.pickNestedString(payload, ['event', 'agreement', 'id']) ||
+      this.pickNestedString(payload, ['agreementId']) ||
+      this.pickNestedString(payload, ['resource', 'id']) ||
+      null
+    );
+  }
+
+  private extractAdobeAgreementStatus(payload: Record<string, unknown>) {
+    return (
+      this.pickNestedString(payload, ['agreement', 'status']) ||
+      this.pickNestedString(payload, ['event', 'agreement', 'status']) ||
+      this.pickNestedString(payload, ['status']) ||
+      null
+    );
+  }
+
+  private extractAdobeEventName(payload: Record<string, unknown>) {
+    return (
+      this.pickNestedString(payload, ['event']) ||
+      this.pickNestedString(payload, ['eventType']) ||
+      this.pickNestedString(payload, ['event', 'eventType']) ||
+      this.pickNestedString(payload, ['webhookNotification', 'event']) ||
+      null
+    );
+  }
+
+  private pickNestedString(
+    payload: Record<string, unknown>,
+    path: string[],
+  ): string | null {
+    let current: unknown = payload;
+
+    for (const segment of path) {
+      if (!current || typeof current !== 'object' || !(segment in current)) {
+        return null;
+      }
+
+      current = (current as Record<string, unknown>)[segment];
+    }
+
+    return typeof current === 'string' && current.trim().length > 0
+      ? current.trim()
+      : null;
   }
 
   private buildCertificateFileName(input: {

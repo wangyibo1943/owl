@@ -57,6 +57,8 @@ It answers two questions quickly:
 - Certificate status endpoint added
 - Certificate download endpoint added
 - Adobe Sign pending sync endpoint added
+- Adobe Sign webhook verification endpoint added
+- Adobe Sign webhook ingestion endpoint added
 
 ### Chain and Legal Flow
 
@@ -75,6 +77,7 @@ It answers two questions quickly:
 - Supabase connected
 - HTTPS enabled for `wehom.net` and `n8n.wehom.net`
 - Adobe Sign auto-sync timer added on the server
+- Adobe webhook route verified over HTTPS
 - Flutter analyze, test, iOS simulator build, and Android debug build all passed locally
 - Live end-to-end backend chain tested multiple times
 
@@ -115,7 +118,6 @@ It answers two questions quickly:
 - California SOS live credential setup
 - Production-grade scoring calibration
 - Notification delivery
-- Object storage for generated legal artifacts
 - Real PDF or DOCX export for demand letter
 
 ### Lower Priority For Current Focus
@@ -158,5 +160,5 @@ Lawyer delivery is explicitly deprioritized for now.
 
 1. Improve credit lookup precision and scoring confidence
 2. Add California SOS live credential or another compliant private-company source
-3. Move generated legal artifacts to object storage
-4. Add stronger Adobe completion monitoring or webhook handling
+3. Add stronger Adobe completion monitoring or webhook signature verification
+4. Polish mobile product UX

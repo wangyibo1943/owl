@@ -651,6 +651,11 @@ export class CreditService {
       riskFlags.push('NON_ACTIVE_STATUS');
     }
 
+    if (company.supportsRegistryStatus && !status) {
+      score -= 10;
+      riskFlags.push('MISSING_REGISTRY_STATUS');
+    }
+
     if (company.inactive) {
       score -= 25;
       riskFlags.push('INACTIVE_ENTITY');
@@ -676,6 +681,11 @@ export class CreditService {
       riskFlags.push('LIMITED_JURISDICTION_DATA');
     }
 
+    if (company.jurisdiction && !this.isUsJurisdiction(company.jurisdiction)) {
+      score -= 20;
+      riskFlags.push('NON_US_JURISDICTION');
+    }
+
     if (company.sourceName === 'SEC EDGAR' && !company.website) {
       score -= 5;
       riskFlags.push('MISSING_PUBLIC_WEBSITE');
@@ -694,6 +704,21 @@ export class CreditService {
     if (company.sourceName === 'SEC EDGAR' && !company.sicCode) {
       score -= 5;
       riskFlags.push('MISSING_INDUSTRY_CLASSIFICATION');
+    }
+
+    if (company.sourceName === 'SEC EDGAR' && !company.lastFilingDate) {
+      score -= 15;
+      riskFlags.push('MISSING_PUBLIC_FILING_HISTORY');
+    }
+
+    if (company.sourceName === 'GLEIF' && !company.registrationNumber) {
+      score -= 10;
+      riskFlags.push('MISSING_LOCAL_REGISTRY_NUMBER');
+    }
+
+    if (company.sourceName === 'GLEIF' && !company.lastFilingDate) {
+      score -= 5;
+      riskFlags.push('MISSING_REGISTRATION_REFRESH_DATE');
     }
 
     if (
@@ -726,6 +751,25 @@ export class CreditService {
     } else if (company.matchConfidence === 'MEDIUM') {
       score -= 5;
       riskFlags.push('MEDIUM_MATCH_CONFIDENCE');
+    }
+
+    if (
+      company.sourceName === 'SEC EDGAR' &&
+      company.website &&
+      company.ticker &&
+      company.sicCode &&
+      company.matchConfidence === 'HIGH'
+    ) {
+      score += 5;
+    }
+
+    if (
+      company.sourceName === 'California SOS' &&
+      company.supportsRegistryStatus &&
+      status &&
+      this.isActiveStatus(status)
+    ) {
+      score += 5;
     }
 
     if (company.lastFilingDate) {
@@ -772,9 +816,9 @@ export class CreditService {
       return `${company.sourceName} data indicates a structurally stable entity with high registry confidence. Current grade is ${creditGrade}. Latest filing visibility and registry signals look healthy.`;
     }
 
-    return `Entity grade is ${creditGrade}. Registry review found the following risk flags: ${riskFlags.join(
+    return `Entity grade is ${creditGrade}. Source is ${company.sourceName}. Registry review found the following risk flags: ${riskFlags.join(
       ', ',
-    )}. Current status is ${company.status ?? 'Unknown'}, match confidence is ${company.matchConfidence.toLowerCase()}, and latest filing date is ${company.lastFilingDate ?? 'not available'}.`;
+    )}. Current status is ${company.status ?? 'Unknown'}, jurisdiction is ${company.jurisdiction ?? 'not available'}, match confidence is ${company.matchConfidence.toLowerCase()}, and latest filing date is ${company.lastFilingDate ?? 'not available'}.`;
   }
 
   private describeProvider(companyState: string | null) {
@@ -846,6 +890,10 @@ export class CreditService {
       status.includes('good standing') ||
       status.includes('current')
     );
+  }
+
+  private isUsJurisdiction(jurisdiction: string) {
+    return jurisdiction.trim().toUpperCase().startsWith('US');
   }
 
   private hasPoBoxAgentAddress(company: NormalizedCompanyRecord) {

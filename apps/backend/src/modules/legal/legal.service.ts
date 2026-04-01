@@ -4,11 +4,12 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join } from 'node:path';
 import JSZip = require('jszip');
 import { SupabaseService } from '../database/supabase.service';
+import { FileStorageService } from '../evidence/file-storage.service';
 import { CreateLegalTriggerDto } from './dto/create-legal-trigger.dto';
 
 type EvidenceRecord = {
@@ -81,14 +82,25 @@ type EvidenceBundleRecord = {
 };
 
 type BundleArtifact = {
-  file_path: string;
+  storage_path: string;
+  legacy_file_path: string;
   file_name: string;
   download_url: string;
+  content_type: string;
+};
+
+type BundleDownloadResult = {
+  content: Buffer;
+  content_type: string;
+  file_name: string;
 };
 
 @Injectable()
 export class LegalService {
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly fileStorageService: FileStorageService,
+  ) {}
 
   async createTrigger(payload: CreateLegalTriggerDto) {
     const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
@@ -467,6 +479,7 @@ export class LegalService {
             evidence_id: trigger.evidence_id,
             includes_demand_letter: Boolean(letter),
             archive_file_name: artifact.file_name,
+            storage_path: artifact.storage_path,
           },
         },
       );
@@ -521,6 +534,7 @@ export class LegalService {
           evidence_id: trigger.evidence_id,
           includes_demand_letter: Boolean(letter),
           archive_file_name: artifact.file_name,
+          storage_path: artifact.storage_path,
         },
       },
     );
@@ -624,10 +638,26 @@ export class LegalService {
       });
     }
 
+    const storagePath = this.extractBundleStoragePath(bundle, triggerId);
+
+    if (storagePath) {
+      try {
+        const file = await this.fileStorageService.readFile(storagePath);
+
+        return {
+          content: file.content,
+          content_type: 'application/zip',
+          file_name: this.buildBundleArtifact(triggerId).file_name,
+        };
+      } catch {
+        // Fall through to legacy local path support.
+      }
+    }
+
     const artifact = this.buildBundleArtifact(triggerId);
 
     try {
-      await access(artifact.file_path, fsConstants.R_OK);
+      await access(artifact.legacy_file_path, fsConstants.R_OK);
     } catch {
       throw new NotFoundException({
         success: false,
@@ -636,7 +666,11 @@ export class LegalService {
       });
     }
 
-    return artifact;
+    return {
+      content: await readFile(artifact.legacy_file_path),
+      content_type: artifact.content_type,
+      file_name: artifact.file_name,
+    };
   }
 
   async generateLawyerHandoff(triggerId: string) {
@@ -849,17 +883,18 @@ export class LegalService {
       },
     });
 
-    await mkdir(join(process.cwd(), 'generated', 'legal-bundles'), {
-      recursive: true,
+    await this.fileStorageService.ensureWritable();
+    await this.fileStorageService.saveFile(artifact.storage_path, buffer, {
+      contentType: artifact.content_type,
     });
-    await writeFile(artifact.file_path, buffer);
 
     return artifact;
   }
 
   private buildBundleArtifact(triggerId: string): BundleArtifact {
     const fileName = `tradeguard-legal-bundle-${triggerId}.zip`;
-    const filePath = join(
+    const storagePath = join('legal-bundles', triggerId, fileName);
+    const legacyFilePath = join(
       process.cwd(),
       'generated',
       'legal-bundles',
@@ -867,10 +902,25 @@ export class LegalService {
     );
 
     return {
+      storage_path: storagePath,
+      legacy_file_path: legacyFilePath,
       file_name: fileName,
-      file_path: filePath,
       download_url: `${this.getApiBaseUrl()}/v1/legal/triggers/${triggerId}/bundle/download`,
+      content_type: 'application/zip',
     };
+  }
+
+  private extractBundleStoragePath(
+    bundle: EvidenceBundleRecord,
+    triggerId: string,
+  ) {
+    const storagePath = bundle.provider_payload?.storage_path;
+
+    if (typeof storagePath === 'string' && storagePath.trim().length > 0) {
+      return storagePath.trim();
+    }
+
+    return this.buildBundleArtifact(triggerId).storage_path;
   }
 
   private getApiBaseUrl() {
