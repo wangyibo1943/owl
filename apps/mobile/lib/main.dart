@@ -10,37 +10,291 @@ void main() {
   runApp(const TradeGuardApp());
 }
 
-class TradeGuardApp extends StatelessWidget {
+enum AppLanguage { en, zh }
+
+class TradeGuardApp extends StatefulWidget {
   const TradeGuardApp({super.key});
+
+  @override
+  State<TradeGuardApp> createState() => _TradeGuardAppState();
+}
+
+class _TradeGuardAppState extends State<TradeGuardApp> {
+  final ValueNotifier<AppLanguage> _language =
+      ValueNotifier<AppLanguage>(AppLanguage.zh);
+
+  @override
+  void dispose() {
+    _language.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     const seed = Color(0xFF0F766E);
 
-    return MaterialApp(
-      title: 'TradeGuard',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: seed),
-        scaffoldBackgroundColor: const Color(0xFFF5F7F4),
-        useMaterial3: true,
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
+    return _TradeGuardLanguageScope(
+      notifier: _language,
+      child: ValueListenableBuilder<AppLanguage>(
+        valueListenable: _language,
+        builder: (context, language, _) {
+          return MaterialApp(
+            title: 'TradeGuard',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(seedColor: seed),
+              scaffoldBackgroundColor: const Color(0xFFF5F7F4),
+              useMaterial3: true,
+              cardTheme: CardThemeData(
+                color: Colors.white,
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            home: const TradeGuardHomePage(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TradeGuardLanguageScope extends InheritedNotifier<ValueNotifier<AppLanguage>> {
+  const _TradeGuardLanguageScope({
+    required ValueNotifier<AppLanguage> notifier,
+    required super.child,
+  }) : super(notifier: notifier);
+
+  static ValueNotifier<AppLanguage> notifierOf(BuildContext context) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<_TradeGuardLanguageScope>();
+    assert(scope != null, 'TradeGuard language scope is missing.');
+    return scope!.notifier!;
+  }
+}
+
+extension TradeGuardLanguageX on BuildContext {
+  AppLanguage get appLanguage => _TradeGuardLanguageScope.notifierOf(this).value;
+
+  ValueNotifier<AppLanguage> get appLanguageNotifier =>
+      _TradeGuardLanguageScope.notifierOf(this);
+
+  AppCopy get copy => AppCopy(appLanguage);
+}
+
+class AppCopy {
+  const AppCopy(this.language);
+
+  final AppLanguage language;
+
+  bool get isChinese => language == AppLanguage.zh;
+
+  String get creditTab => isChinese ? '征信查询' : 'Credit';
+  String get evidenceTab => isChinese ? '证据存证' : 'Evidence';
+  String get switchLanguage => isChinese ? '切换语言' : 'Language';
+  String get chinese => '中文';
+  String get english => 'English';
+  String get creditHeroTitle => isChinese ? '美国买家信用查询' : 'US Buyer Risk Check';
+  String get creditHeroBody => isChinese
+      ? '连接 TradeGuard 实时后端，查询企业主体，给出信用等级、匹配置信度和可解释风险提示，帮助你在发货前先看清对方。'
+      : 'Run a live company lookup against TradeGuard backend, score the entity, and surface registry confidence before you ship.';
+  String get lookupInput => isChinese ? '查询条件' : 'Lookup Input';
+  String get companyName => isChinese ? '公司名称' : 'Company name';
+  String get website => isChinese ? '官网' : 'Website';
+  String get websiteHint => isChinese ? 'example.com' : 'example.com';
+  String get stateRegistryHint => isChinese ? '州注册提示' : 'State registry hint';
+  String get auto => isChinese ? '自动' : 'Auto';
+  String get california => isChinese ? '加州' : 'California';
+  String get checking => isChinese ? '查询中...' : 'Checking...';
+  String get runCreditCheck => isChinese ? '开始征信' : 'Run Credit Check';
+  String get readyToVerifyBuyer => isChinese ? '准备开始核验买家' : 'Ready to verify a buyer';
+  String get readyToVerifyBuyerBody => isChinese
+      ? '输入美国公司名称和可选官网，即可获取实时信用等级、主体匹配置信度和风险解释。'
+      : 'Enter a US company name and optional website to get a live risk grade, registry match confidence, and evidence-backed explanation.';
+  String get evidenceHeroTitle => isChinese ? '证据固定与存证' : 'Evidence Preservation';
+  String get evidenceHeroBody => isChinese
+      ? '上传合同、聊天记录或截图进入实时存证链路。后端会返回 Adobe Sign 协议状态和证书下载地址。'
+      : 'Submit text evidence into the live notarization pipeline. Adobe Sign agreements and certificate URLs are returned from the backend.';
+  String get evidenceSubmission => isChinese ? '证据提交' : 'Evidence Submission';
+  String get dealReference => isChinese ? '交易编号' : 'Deal reference';
+  String get chooseEvidenceFile => isChinese ? '选择证据文件' : 'Choose evidence file';
+  String get evidenceNoteFallback =>
+      isChinese ? '证据备注（可选兜底）' : 'Evidence note (optional fallback)';
+  String get submitting => isChinese ? '提交中...' : 'Submitting...';
+  String get submitForPreservation =>
+      isChinese ? '提交并固定证据' : 'Submit for Preservation';
+  String get preserveContractEvidence =>
+      isChinese ? '固定合同与聊天证据' : 'Preserve contract evidence';
+  String get preserveContractEvidenceBody => isChinese
+      ? '上传 PDF、截图或聊天导出文件，推入实时存证流程，并保留可下载的证书链路。'
+      : 'Upload a PDF, screenshot, or chat export to push it into the live notarization flow and keep a downloadable certificate trail.';
+  String get fileBytesError =>
+      isChinese ? '当前设备无法读取文件内容。' : 'File bytes could not be loaded on this device.';
+  String get chooseFileFirst =>
+      isChinese ? '请先选择文件或输入证据文本。' : 'Choose a file or enter evidence text first.';
+  String get certificateOpenError =>
+      isChinese ? '无法打开证书链接。' : 'Certificate URL could not be opened.';
+  String get evidenceOpenError =>
+      isChinese ? '无法打开证据文件链接。' : 'Evidence file URL could not be opened.';
+  String get evidenceStatus => isChinese ? '证据状态' : 'Evidence Status';
+  String get evidenceReceived => isChinese ? '证据已接收' : 'Evidence received';
+  String get evidenceReceivedBody => isChinese
+      ? '证据文件已经存入系统，正在等待存证或同步最新状态。'
+      : 'The evidence file is stored and ready for notarization updates.';
+  String get evidenceId => isChinese ? '证据 ID' : 'Evidence ID';
+  String get fileHash => isChinese ? '文件哈希' : 'Hash';
+  String get uploadStatus => isChinese ? '上传状态' : 'Upload Status';
+  String get certificateStatus => isChinese ? '证书状态' : 'Certificate Status';
+  String get certificateId => isChinese ? '证书 ID' : 'Certificate ID';
+  String get certificateUrl => isChinese ? '证书链接' : 'Certificate URL';
+  String get pending => isChinese ? '等待中' : 'Pending';
+  String get refreshing => isChinese ? '刷新中...' : 'Refreshing...';
+  String get refreshCertificate =>
+      isChinese ? '刷新证书状态' : 'Refresh Certificate';
+  String get openEvidenceFile =>
+      isChinese ? '打开证据文件' : 'Open Evidence File';
+  String get openCertificate => isChinese ? '打开证书' : 'Open Certificate';
+  String get selectedFile => isChinese ? '已选文件' : 'Selected file';
+  String get score => isChinese ? '评分' : 'Score';
+  String get confidence => isChinese ? '置信度' : 'Confidence';
+  String get source => isChinese ? '来源' : 'Source';
+  String get websiteMatch => isChinese ? '官网匹配' : 'Website';
+  String get ticker => isChinese ? '股票代码' : 'Ticker';
+  String get status => isChinese ? '状态' : 'Status';
+  String get jurisdiction => isChinese ? '司法辖区' : 'Jurisdiction';
+  String get registration => isChinese ? '注册号' : 'Registration';
+  String get entityType => isChinese ? '主体类型' : 'Entity Type';
+  String get latestFiling => isChinese ? '最近披露' : 'Latest Filing';
+  String get industry => isChinese ? '行业' : 'Industry';
+  String get notAvailable => isChinese ? '暂无' : 'N/A';
+  String get requestFailed => isChinese ? '请求失败' : 'Request failed';
+  String get companyNotFound => isChinese ? '未找到该公司' : 'Company was not found';
+  String get unsupportedState => isChinese
+      ? '当前 MVP 仅支持加州私营公司州注册查询'
+      : 'Only California state registry lookup is supported for private companies in this MVP';
+  String get badRequest => isChinese ? '请求参数有误' : 'Bad Request';
+  String get certificateReady => isChinese ? '证书已就绪' : 'Certificate ready';
+  String get providerFollowUpNeeded =>
+      isChinese ? '需要继续跟进提供方状态' : 'Provider follow-up needed';
+  String get notarizationInProgress =>
+      isChinese ? '存证处理中' : 'Notarization in progress';
+  String get evidenceProcessing => isChinese ? '证据处理中' : 'Evidence processing';
+  String get certificateReadyBody => isChinese
+      ? '证书已经生成，现在可以直接打开或下载。'
+      : 'The provider certificate is available and can be opened or downloaded now.';
+  String get providerFollowUpNeededBody => isChinese
+      ? '提供方返回了失败状态，请检查 Adobe Sign 后再次刷新。'
+      : 'The provider reported a failure state. Refresh again after checking Adobe Sign.';
+  String get notarizationInProgressBody => isChinese
+      ? '证据已进入实时存证队列，请稍后刷新查看证书完成情况。'
+      : 'The evidence is in the live notarization queue. Refresh to check for certificate completion.';
+  String get evidenceProcessingBody => isChinese
+      ? '证据已被系统接收，正在等待提供方状态更新。'
+      : 'The evidence has been accepted and is waiting for provider status updates.';
+  String gradeRiskTitle(String grade) => switch (grade) {
+        'A' => isChinese ? '结构性风险较低' : 'Low structural risk',
+        'B' => isChinese ? '建议进一步复核' : 'Moderate review recommended',
+        'C' => isChinese ? '商业风险偏高' : 'Elevated commercial risk',
+        _ => isChinese ? '高风险预警' : 'High risk warning',
+      };
+  String websiteMatchLabel(String value) => switch (value) {
+        'VERIFIED' => isChinese ? '已验证' : 'Verified',
+        'PROBABLE' => isChinese ? '大概率匹配' : 'Probable',
+        'MISMATCH' => isChinese ? '不匹配' : 'Mismatch',
+        _ => isChinese ? '未知' : 'Unknown',
+      };
+  String riskFlagLabel(String flag) {
+    const zh = {
+      'MISSING_PUBLIC_WEBSITE': '缺少公开官网',
+      'MEDIUM_MATCH_CONFIDENCE': '匹配置信度中等',
+      'LOW_MATCH_CONFIDENCE': '匹配置信度较低',
+      'INPUT_WEBSITE_NOT_VERIFIED': '输入官网未验证',
+      'WEBSITE_MISMATCH': '官网不匹配',
+      'NON_ACTIVE_STATUS': '主体状态非正常',
+      'INACTIVE_ENTITY': '主体已失效',
+      'BRANCH_ENTITY': '分支主体',
+      'MISSING_REGISTRATION_NUMBER': '缺少注册号',
+      'PO_BOX_AGENT': '代理地址为邮政信箱',
+      'LIMITED_JURISDICTION_DATA': '司法辖区信息有限',
+      'NON_US_JURISDICTION': '非美国辖区',
+      'MISSING_LEI': '缺少 LEI',
+      'MISSING_TICKER': '缺少股票代码',
+      'MISSING_INDUSTRY_CLASSIFICATION': '缺少行业分类',
+      'MISSING_PUBLIC_FILING_HISTORY': '缺少公开披露记录',
+      'MISSING_LOCAL_REGISTRY_NUMBER': '缺少本地注册号',
+      'MISSING_REGISTRATION_REFRESH_DATE': '缺少登记更新时间',
+      'MISSING_AGENT_ADDRESS': '缺少代理地址',
+      'NEW_ENTITY': '成立时间较短',
+      'MISSING_INCORPORATION_DATE': '缺少成立时间',
+      'STALE_PUBLIC_FILINGS': '公开披露记录过旧',
+      'AGING_PUBLIC_FILINGS': '公开披露记录偏旧',
+    };
+
+    return isChinese ? (zh[flag] ?? flag) : flag;
+  }
+}
+
+String _mapErrorMessage(BuildContext context, Object error) {
+  final copy = context.copy;
+  final message = '$error';
+  if (message.contains('Company was not found')) return copy.companyNotFound;
+  if (message.contains('UNSUPPORTED_STATE') ||
+      message.contains(
+        'Only California state registry lookup is supported for private companies in this MVP',
+      )) {
+    return copy.unsupportedState;
+  }
+  if (message.contains('Bad Request')) return copy.badRequest;
+  if (message.startsWith('Exception: ')) {
+    return message.replaceFirst('Exception: ', '');
+  }
+  return message == 'Request failed' ? copy.requestFailed : message;
+}
+
+class _LanguageSwitcher extends StatelessWidget {
+  const _LanguageSwitcher();
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = context.copy;
+    final notifier = context.appLanguageNotifier;
+    return PopupMenuButton<AppLanguage>(
+      tooltip: copy.switchLanguage,
+      onSelected: (language) {
+        notifier.value = language;
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<AppLanguage>(
+          value: AppLanguage.zh,
+          child: Text(copy.chinese),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
+        PopupMenuItem<AppLanguage>(
+          value: AppLanguage.en,
+          child: Text(copy.english),
+        ),
+      ],
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F3F0),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          context.appLanguage == AppLanguage.zh ? '中文' : 'EN',
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      home: const TradeGuardHomePage(),
     );
   }
 }
@@ -50,15 +304,18 @@ class TradeGuardHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final copy = context.copy;
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('TradeGuard'),
-          bottom: const TabBar(
+          actions: const [_LanguageSwitcher()],
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'Credit'),
-              Tab(text: 'Evidence'),
+              Tab(text: copy.creditTab),
+              Tab(text: copy.evidenceTab),
             ],
           ),
         ),
@@ -115,7 +372,7 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
       });
     } catch (error) {
       setState(() {
-        _error = '$error';
+        _error = _mapErrorMessage(context, error);
       });
     } finally {
       if (mounted) {
@@ -128,13 +385,14 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final copy = context.copy;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const _HeroCard(
-          title: 'US Buyer Risk Check',
-          body:
-              'Run a live company lookup against TradeGuard backend, score the entity, and surface registry confidence before you ship.',
+        _HeroCard(
+          title: copy.creditHeroTitle,
+          body: copy.creditHeroBody,
         ),
         const SizedBox(height: 16),
         Card(
@@ -143,39 +401,39 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Lookup Input',
+                Text(
+                  copy.lookupInput,
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _companyController,
-                  decoration: const InputDecoration(
-                    labelText: 'Company name',
+                  decoration: InputDecoration(
+                    labelText: copy.companyName,
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _websiteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Website',
-                    hintText: 'example.com',
+                  decoration: InputDecoration(
+                    labelText: copy.website,
+                    hintText: copy.websiteHint,
                   ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _selectedState,
-                  decoration: const InputDecoration(
-                    labelText: 'State registry hint',
+                  decoration: InputDecoration(
+                    labelText: copy.stateRegistryHint,
                   ),
-                  items: const [
+                  items: [
                     DropdownMenuItem<String>(
                       value: '',
-                      child: Text('Auto'),
+                      child: Text(copy.auto),
                     ),
                     DropdownMenuItem<String>(
                       value: 'CA',
-                      child: Text('California'),
+                      child: Text(copy.california),
                     ),
                   ],
                   onChanged: (value) {
@@ -194,7 +452,9 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.search),
-                  label: Text(_isLoading ? 'Checking...' : 'Run Credit Check'),
+                  label: Text(
+                    _isLoading ? copy.checking : copy.runCreditCheck,
+                  ),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
@@ -210,10 +470,9 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
         ),
         if (!_isLoading && _result == null && _error == null) ...[
           const SizedBox(height: 16),
-          const _EmptyStateCard(
-            title: 'Ready to verify a buyer',
-            body:
-                'Enter a US company name and optional website to get a live risk grade, registry match confidence, and evidence-backed explanation.',
+          _EmptyStateCard(
+            title: copy.readyToVerifyBuyer,
+            body: copy.readyToVerifyBuyerBody,
             icon: Icons.domain_verification_outlined,
           ),
         ],
@@ -273,7 +532,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
     final picked = result.files.first;
     if (picked.bytes == null) {
       setState(() {
-        _error = 'File bytes could not be loaded on this device.';
+        _error = context.copy.fileBytesError;
       });
       return;
     }
@@ -298,7 +557,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
       final fallbackText = _contentController.text.trim();
 
       if (selectedFile == null && fallbackText.isEmpty) {
-        throw Exception('Choose a file or enter evidence text first.');
+        throw Exception(context.copy.chooseFileFirst);
       }
 
       final submission = await TradeGuardApi.instance.uploadEvidence(
@@ -321,7 +580,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
       });
     } catch (error) {
       setState(() {
-        _error = '$error';
+        _error = _mapErrorMessage(context, error);
       });
     } finally {
       if (mounted) {
@@ -351,7 +610,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
       });
     } catch (error) {
       setState(() {
-        _error = '$error';
+        _error = _mapErrorMessage(context, error);
       });
     } finally {
       if (mounted) {
@@ -373,7 +632,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
 
     if (!launched && mounted) {
       setState(() {
-        _error = 'Certificate URL could not be opened.';
+        _error = context.copy.certificateOpenError;
       });
     }
   }
@@ -389,20 +648,21 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
 
     if (!launched && mounted) {
       setState(() {
-        _error = 'Evidence file URL could not be opened.';
+        _error = context.copy.evidenceOpenError;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final copy = context.copy;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const _HeroCard(
-          title: 'Evidence Preservation',
-          body:
-              'Submit text evidence into the live notarization pipeline. Adobe Sign agreements and certificate URLs are returned from the backend.',
+        _HeroCard(
+          title: copy.evidenceHeroTitle,
+          body: copy.evidenceHeroBody,
         ),
         const SizedBox(height: 16),
         Card(
@@ -411,20 +671,19 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Evidence Submission',
+                Text(
+                  copy.evidenceSubmission,
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _companyController,
-                  decoration: const InputDecoration(labelText: 'Company name'),
+                  decoration: InputDecoration(labelText: copy.companyName),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _dealReferenceController,
-                  decoration:
-                      const InputDecoration(labelText: 'Deal reference'),
+                  decoration: InputDecoration(labelText: copy.dealReference),
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
@@ -432,7 +691,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                   icon: const Icon(Icons.attach_file),
                   label: Text(
                     _selectedFile == null
-                        ? 'Choose evidence file'
+                        ? copy.chooseEvidenceFile
                         : _selectedFile!.filename,
                   ),
                 ),
@@ -445,8 +704,8 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                   controller: _contentController,
                   minLines: 6,
                   maxLines: 10,
-                  decoration: const InputDecoration(
-                    labelText: 'Evidence note (optional fallback)',
+                  decoration: InputDecoration(
+                    labelText: copy.evidenceNoteFallback,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -460,7 +719,9 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                         )
                       : const Icon(Icons.verified),
                   label: Text(
-                    _isSubmitting ? 'Submitting...' : 'Submit for Preservation',
+                    _isSubmitting
+                        ? copy.submitting
+                        : copy.submitForPreservation,
                   ),
                 ),
                 if (_error != null) ...[
@@ -477,10 +738,9 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
         ),
         if (!_isSubmitting && _submission == null && _error == null) ...[
           const SizedBox(height: 16),
-          const _EmptyStateCard(
-            title: 'Preserve contract evidence',
-            body:
-                'Upload a PDF, screenshot, or chat export to push it into the live notarization flow and keep a downloadable certificate trail.',
+          _EmptyStateCard(
+            title: copy.preserveContractEvidence,
+            body: copy.preserveContractEvidenceBody,
             icon: Icons.verified_user_outlined,
           ),
         ],
@@ -548,6 +808,8 @@ class _CreditResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final copy = context.copy;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -573,48 +835,51 @@ class _CreditResultCard extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _MetricChip(label: 'Score', value: '${result.riskScore}'),
+                _MetricChip(label: copy.score, value: '${result.riskScore}'),
                 _MetricChip(
-                  label: 'Confidence',
+                  label: copy.confidence,
                   value: result.matchConfidence,
                 ),
-                _MetricChip(label: 'Source', value: result.sourceName),
-                _MetricChip(label: 'Website', value: result.websiteMatchLabel),
+                _MetricChip(label: copy.source, value: result.sourceName),
+                _MetricChip(
+                  label: copy.websiteMatch,
+                  value: result.websiteMatchLabel(context),
+                ),
                 if (result.ticker != null)
-                  _MetricChip(label: 'Ticker', value: result.ticker!),
+                  _MetricChip(label: copy.ticker, value: result.ticker!),
               ],
             ),
             const SizedBox(height: 16),
             _StatusBanner(
               tone: result.riskTone,
-              title: result.riskToneTitle,
+              title: result.riskToneTitle(context),
               body: result.summary,
             ),
             const SizedBox(height: 16),
-            _DetailRow(label: 'Status', value: result.status),
+            _DetailRow(label: copy.status, value: result.status),
             _DetailRow(
-              label: 'Jurisdiction',
-              value: result.jurisdiction ?? 'N/A',
+              label: copy.jurisdiction,
+              value: result.jurisdiction ?? copy.notAvailable,
             ),
             _DetailRow(
-              label: 'Registration',
-              value: result.registrationNumber ?? 'N/A',
+              label: copy.registration,
+              value: result.registrationNumber ?? copy.notAvailable,
             ),
             _DetailRow(
-              label: 'Entity Type',
-              value: result.entityType ?? 'N/A',
+              label: copy.entityType,
+              value: result.entityType ?? copy.notAvailable,
             ),
             _DetailRow(
-              label: 'Latest Filing',
-              value: result.lastFilingDate ?? 'N/A',
+              label: copy.latestFiling,
+              value: result.lastFilingDate ?? copy.notAvailable,
             ),
             _DetailRow(
-              label: 'Industry',
-              value: result.sicDescription ?? 'N/A',
+              label: copy.industry,
+              value: result.sicDescription ?? copy.notAvailable,
             ),
             _DetailRow(
-              label: 'Website Match',
-              value: result.websiteMatchLabel,
+              label: copy.websiteMatch,
+              value: result.websiteMatchLabel(context),
             ),
             if (result.riskFlags.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -624,7 +889,7 @@ class _CreditResultCard extends StatelessWidget {
                 children: result.riskFlags
                     .map(
                       (flag) => Chip(
-                        label: Text(flag),
+                        label: Text(copy.riskFlagLabel(flag)),
                         backgroundColor: const Color(0xFFE8F3F0),
                       ),
                     )
@@ -657,41 +922,43 @@ class _EvidenceResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final copy = context.copy;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Evidence Status',
+            Text(
+              copy.evidenceStatus,
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
-            _DetailRow(label: 'Evidence ID', value: submission.evidenceId),
-            _DetailRow(label: 'Hash', value: submission.fileHash),
-            _DetailRow(label: 'Upload Status', value: submission.status),
+            _DetailRow(label: copy.evidenceId, value: submission.evidenceId),
+            _DetailRow(label: copy.fileHash, value: submission.fileHash),
+            _DetailRow(label: copy.uploadStatus, value: submission.status),
             const SizedBox(height: 8),
             _StatusBanner(
               tone: certificate?.statusTone ??
                   _statusToneForValue(submission.status),
-              title: certificate?.statusTitle ?? 'Evidence received',
-              body: certificate?.statusSummary ??
-                  'The evidence file is stored and ready for notarization updates.',
+              title: certificate?.statusTitle(context) ?? copy.evidenceReceived,
+              body: certificate?.statusSummary(context) ??
+                  copy.evidenceReceivedBody,
             ),
             if (certificate != null) ...[
               const SizedBox(height: 16),
               _DetailRow(
-                label: 'Certificate Status',
+                label: copy.certificateStatus,
                 value: certificate!.status,
               ),
               _DetailRow(
-                label: 'Certificate ID',
-                value: certificate!.certificateId ?? 'Pending',
+                label: copy.certificateId,
+                value: certificate!.certificateId ?? copy.pending,
               ),
               _DetailRow(
-                label: 'Certificate URL',
-                value: certificate!.certificateUrl ?? 'Pending',
+                label: copy.certificateUrl,
+                value: certificate!.certificateUrl ?? copy.pending,
               ),
             ],
             const SizedBox(height: 16),
@@ -709,19 +976,19 @@ class _EvidenceResultCard extends StatelessWidget {
                         )
                       : const Icon(Icons.refresh),
                   label: Text(
-                    isRefreshing ? 'Refreshing...' : 'Refresh Certificate',
+                    isRefreshing ? copy.refreshing : copy.refreshCertificate,
                   ),
                 ),
                 OutlinedButton.icon(
                   onPressed: onOpenEvidence,
                   icon: const Icon(Icons.download),
-                  label: const Text('Open Evidence File'),
+                  label: Text(copy.openEvidenceFile),
                 ),
                 if (certificate?.certificateUrl != null)
                   OutlinedButton.icon(
                     onPressed: onOpenCertificate,
                     icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Open Certificate'),
+                    label: Text(copy.openCertificate),
                   ),
               ],
             ),
@@ -783,6 +1050,8 @@ class _SelectedFileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final copy = context.copy;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -793,8 +1062,8 @@ class _SelectedFileCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Selected file',
+          Text(
+            copy.selectedFile,
             style: TextStyle(
               fontSize: 12,
               color: Color(0xFF4B5563),
@@ -1137,12 +1406,8 @@ class CreditLookupResult {
     );
   }
 
-  String get websiteMatchLabel => switch (websiteMatch) {
-        'VERIFIED' => 'Verified',
-        'PROBABLE' => 'Probable',
-        'MISMATCH' => 'Mismatch',
-        _ => 'Unknown',
-      };
+  String websiteMatchLabel(BuildContext context) =>
+      context.copy.websiteMatchLabel(websiteMatch);
 
   StatusTone get riskTone {
     if (creditGrade == 'A') {
@@ -1170,12 +1435,8 @@ class CreditLookupResult {
     );
   }
 
-  String get riskToneTitle => switch (creditGrade) {
-        'A' => 'Low structural risk',
-        'B' => 'Moderate review recommended',
-        'C' => 'Elevated commercial risk',
-        _ => 'High risk warning',
-      };
+  String riskToneTitle(BuildContext context) =>
+      context.copy.gradeRiskTitle(creditGrade);
 }
 
 class EvidenceSubmissionResult {
@@ -1222,22 +1483,18 @@ class CertificateStatusResult {
 
   StatusTone get statusTone => _statusToneForValue(status);
 
-  String get statusTitle => switch (status.toUpperCase()) {
-        'COMPLETED' => 'Certificate ready',
-        'FAILED' => 'Provider follow-up needed',
-        'IN_PROGRESS' => 'Notarization in progress',
-        _ => 'Evidence processing',
+  String statusTitle(BuildContext context) => switch (status.toUpperCase()) {
+        'COMPLETED' => context.copy.certificateReady,
+        'FAILED' => context.copy.providerFollowUpNeeded,
+        'IN_PROGRESS' => context.copy.notarizationInProgress,
+        _ => context.copy.evidenceProcessing,
       };
 
-  String get statusSummary => switch (status.toUpperCase()) {
-        'COMPLETED' =>
-          'The provider certificate is available and can be opened or downloaded now.',
-        'FAILED' =>
-          'The provider reported a failure state. Refresh again after checking Adobe Sign.',
-        'IN_PROGRESS' =>
-          'The evidence is in the live notarization queue. Refresh to check for certificate completion.',
-        _ =>
-          'The evidence has been accepted and is waiting for provider status updates.',
+  String statusSummary(BuildContext context) => switch (status.toUpperCase()) {
+        'COMPLETED' => context.copy.certificateReadyBody,
+        'FAILED' => context.copy.providerFollowUpNeededBody,
+        'IN_PROGRESS' => context.copy.notarizationInProgressBody,
+        _ => context.copy.evidenceProcessingBody,
       };
 }
 

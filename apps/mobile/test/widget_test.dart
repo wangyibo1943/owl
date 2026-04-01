@@ -5,8 +5,8 @@ void main() {
   testWidgets('TradeGuard app renders tabs', (tester) async {
     await tester.pumpWidget(const TradeGuardApp());
 
-    expect(find.text('Credit'), findsOneWidget);
-    expect(find.text('Evidence'), findsOneWidget);
+    expect(find.text('征信查询'), findsOneWidget);
+    expect(find.text('证据存证'), findsOneWidget);
     expect(find.text('TradeGuard'), findsOneWidget);
   });
 }
