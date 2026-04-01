@@ -36,6 +36,8 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Evidence upload persistence and n8n trigger structure are implemented
 - Certificate status route can read stored records from Supabase
 - Certificate download route can proxy the stored provider certificate URL
+- Adobe Sign provider adapter routes are implemented in the backend
+- Uploaded evidence files are now written to server-side file storage
 - Internal notarization callback route is implemented for workflow result persistence
 - Blockchain anchor API skeleton is implemented
 - Legal trigger API skeleton is implemented
@@ -48,9 +50,10 @@ It is intended for founders, engineers, and future collaborators who need a fast
 
 - Credit lookup API route is wired to SEC EDGAR and California SOS with first-pass grading rules
 - Credit lookup now evaluates website-aware SEC matches and emits `risk_score` plus `match_confidence`
-- Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
+- Evidence upload API route persists metadata, writes a local file copy, and triggers n8n, but does not yet store binaries in object storage
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
 - Certificate download route depends on the provider certificate URL remaining available
+- Adobe Sign provider integration code exists, but still requires real Adobe credentials before live use
 - Blockchain anchor route persists a first-pass anchor record, but still uses a mock anchor provider
 - Legal trigger route persists first-pass case intake state, but still depends on follow-up generation endpoints for a complete dispute package
 - Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
@@ -66,6 +69,8 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Full production-grade risk scoring engine
 - Real file upload storage
 - Real notarization provider integration
+- Real Adobe Sign credentials and live workflow cutover
+- Object storage migration for uploaded evidence files
 - Real notification delivery
 - Blockchain anchoring implementation
 - Authentication

@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
+import { AdobeSignService } from './adobe-sign.service';
+import { FileStorageService } from './file-storage.service';
 import { SupabaseService } from '../database/supabase.service';
+import { CreateAdobeSignNotarizationDto } from './dto/create-adobe-sign-notarization.dto';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import { RecordNotarizationResultDto } from './dto/record-notarization-result.dto';
 
@@ -40,11 +43,21 @@ type CertificateDownloadResult = {
   file_name: string;
 };
 
+type EvidenceDownloadResult = {
+  content: Buffer;
+  content_type: string;
+  file_name: string;
+};
+
 @Injectable()
 export class EvidenceService {
   private readonly logger = new Logger(EvidenceService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly adobeSignService: AdobeSignService,
+    private readonly fileStorageService: FileStorageService,
+  ) {}
 
   async create(payload: CreateEvidenceDto) {
     const decoded = this.decodeFile(payload.file_content_base64);
@@ -61,6 +74,9 @@ export class EvidenceService {
     const hash = createHash('sha256').update(decoded).digest('hex');
     const fileHash = `sha256:${hash}`;
     const storagePath = this.buildStoragePath(evidenceId, payload.filename);
+
+    await this.fileStorageService.ensureWritable();
+    await this.fileStorageService.saveFile(storagePath, decoded);
 
     await this.supabaseService.insert('evidence_records', {
       id: evidenceId,
@@ -95,6 +111,39 @@ export class EvidenceService {
         status: workflowResult.status,
         workflow_triggered: workflowResult.triggered,
       },
+    };
+  }
+
+  async downloadEvidenceFile(evidenceId: string): Promise<EvidenceDownloadResult> {
+    const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
+      'evidence_records',
+      {
+        id: evidenceId,
+      },
+    );
+
+    if (!evidence) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'EVIDENCE_NOT_FOUND',
+        message: 'Evidence record was not found',
+      });
+    }
+
+    if (!evidence.storage_path) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'FILE_NOT_FOUND',
+        message: 'Stored file path was not found',
+      });
+    }
+
+    const file = await this.fileStorageService.readFile(evidence.storage_path);
+
+    return {
+      content: file.content,
+      content_type: evidence.mime_type || 'application/octet-stream',
+      file_name: evidence.filename,
     };
   }
 
@@ -149,6 +198,94 @@ export class EvidenceService {
     };
   }
 
+  async createAdobeSignNotarization(payload: CreateAdobeSignNotarizationDto) {
+    const agreement = await this.adobeSignService.createAgreement({
+      filename: payload.filename,
+      mimeType: payload.mime_type,
+      fileContentBase64: payload.file_content_base64,
+    });
+
+    return {
+      provider_name: 'Adobe Acrobat Sign',
+      provider_certificate_id: agreement.agreementId,
+      certificate_url: this.buildCertificateDownloadUrl(payload.evidence_id),
+      status: this.adobeSignService.mapAgreementStatus(
+        agreement.agreementStatus,
+      ),
+      provider_payload: {
+        agreement_id: agreement.agreementId,
+        agreement_status: agreement.agreementStatus,
+        file_hash: payload.file_hash,
+        adobe_payload: agreement.rawPayload,
+      },
+    };
+  }
+
+  async syncAdobeSignNotarization(evidenceId: string) {
+    const certificate =
+      await this.supabaseService.findFirst<NotarizationCertificateRecord>(
+        'notarization_certificates',
+        {
+          evidence_id: evidenceId,
+        },
+        {
+          orderBy: 'created_at',
+          ascending: false,
+        },
+      );
+
+    if (!certificate) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'CERTIFICATE_NOT_FOUND',
+        message: 'Certificate record was not found',
+      });
+    }
+
+    const providerName = certificate.provider_name.toLowerCase();
+
+    if (!providerName.includes('adobe')) {
+      throw new BadRequestException({
+        success: false,
+        error_code: 'UNSUPPORTED_PROVIDER',
+        message: 'This certificate is not managed by Adobe Sign sync',
+      });
+    }
+
+    const agreementId =
+      certificate.provider_certificate_id ||
+      (typeof certificate.provider_payload?.agreement_id === 'string'
+        ? certificate.provider_payload.agreement_id
+        : null);
+
+    if (!agreementId) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'CERTIFICATE_NOT_FOUND',
+        message: 'Adobe agreement id was not found',
+      });
+    }
+
+    const agreement = await this.adobeSignService.getAgreement(agreementId);
+    const agreementStatus =
+      typeof agreement.status === 'string' ? agreement.status : 'IN_PROCESS';
+    const normalizedStatus =
+      this.adobeSignService.mapAgreementStatus(agreementStatus);
+
+    return this.recordNotarizationResult(evidenceId, {
+      provider_name: 'Adobe Acrobat Sign',
+      provider_certificate_id: agreementId,
+      certificate_url: this.buildCertificateDownloadUrl(evidenceId),
+      status: normalizedStatus,
+      provider_payload: {
+        ...(certificate.provider_payload ?? {}),
+        agreement_id: agreementId,
+        agreement_status: agreementStatus,
+        adobe_payload: agreement,
+      },
+    });
+  }
+
   async downloadCertificate(evidenceId: string): Promise<CertificateDownloadResult> {
     const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
       'evidence_records',
@@ -183,6 +320,36 @@ export class EvidenceService {
         error_code: 'CERTIFICATE_NOT_FOUND',
         message: 'Certificate file was not found',
       });
+    }
+
+    if (certificate.provider_name.toLowerCase().includes('adobe')) {
+      const agreementId =
+        certificate.provider_certificate_id ||
+        (typeof certificate.provider_payload?.agreement_id === 'string'
+          ? certificate.provider_payload.agreement_id
+          : null);
+
+      if (!agreementId) {
+        throw new NotFoundException({
+          success: false,
+          error_code: 'CERTIFICATE_NOT_FOUND',
+          message: 'Adobe agreement id was not found',
+        });
+      }
+
+      const document = await this.adobeSignService.downloadAgreementCombinedDocument(
+        agreementId,
+      );
+
+      return {
+        content: document.content,
+        content_type: document.contentType,
+        file_name: this.buildAdobeCertificateFileName({
+          evidence,
+          certificate,
+          agreementId,
+        }),
+      };
     }
 
     const response = await fetch(certificate.certificate_url);
@@ -313,6 +480,10 @@ export class EvidenceService {
     return `evidence/${evidenceId}/${sanitizedFilename}`;
   }
 
+  private buildCertificateDownloadUrl(evidenceId: string) {
+    return `${this.getApiBaseUrl()}/v1/evidence/${evidenceId}/certificate/download`;
+  }
+
   private buildCertificateFileName(input: {
     evidence: EvidenceRecord;
     certificate: NotarizationCertificateRecord;
@@ -332,6 +503,20 @@ export class EvidenceService {
     return `${normalizedBaseName}-certificate-${providerId}${extension}`;
   }
 
+  private buildAdobeCertificateFileName(input: {
+    evidence: EvidenceRecord;
+    certificate: NotarizationCertificateRecord;
+    agreementId: string;
+  }) {
+    const baseName = input.evidence.filename.replace(/\.[^.]+$/, '');
+    const normalizedBaseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const providerId =
+      input.certificate.provider_certificate_id?.replace(/[^a-zA-Z0-9._-]/g, '_') ||
+      input.agreementId;
+
+    return `${normalizedBaseName}-adobe-sign-certificate-${providerId}.pdf`;
+  }
+
   private extensionFromContentType(contentType: string) {
     switch (contentType) {
       case 'application/pdf':
@@ -345,6 +530,17 @@ export class EvidenceService {
       default:
         return '';
     }
+  }
+
+  private getApiBaseUrl() {
+    const explicitBaseUrl = process.env.TRADEGUARD_API_BASE_URL?.trim();
+
+    if (explicitBaseUrl) {
+      return explicitBaseUrl.replace(/\/$/, '');
+    }
+
+    const port = process.env.PORT?.trim() || '3000';
+    return `http://localhost:${port}`;
   }
 
   private async triggerNotarizationWorkflow(

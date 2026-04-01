@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { EvidenceService } from './evidence.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
+import { CreateAdobeSignNotarizationDto } from './dto/create-adobe-sign-notarization.dto';
 import { RecordNotarizationResultDto } from './dto/record-notarization-result.dto';
 
 @Controller('evidence')
@@ -34,6 +35,31 @@ export class EvidenceController {
     );
 
     return res.send(certificate.content);
+  }
+
+  @Get(':evidenceId/file/download')
+  async downloadEvidenceFile(
+    @Param('evidenceId') evidenceId: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.evidenceService.downloadEvidenceFile(evidenceId);
+
+    res.setHeader('Content-Type', file.content_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.file_name}"`);
+
+    return res.send(file.content);
+  }
+
+  @Post('providers/adobe-sign/notarize')
+  createAdobeSignNotarization(
+    @Body() payload: CreateAdobeSignNotarizationDto,
+  ) {
+    return this.evidenceService.createAdobeSignNotarization(payload);
+  }
+
+  @Post(':evidenceId/providers/adobe-sign/sync')
+  syncAdobeSignNotarization(@Param('evidenceId') evidenceId: string) {
+    return this.evidenceService.syncAdobeSignNotarization(evidenceId);
   }
 
   @Post(':evidenceId/notarization-result')

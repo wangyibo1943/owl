@@ -19,7 +19,7 @@
         "url": "={{$env.NOTARIZATION_API_URL}}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\"evidence_id\":\"{{$json.body.evidence_id}}\",\"file_hash\":\"{{$json.body.file_hash}}\",\"filename\":\"{{$json.body.filename}}\",\"mime_type\":\"{{$json.body.mime_type}}\"}"
+        "jsonBody": "={\"evidence_id\":\"{{$json.body.evidence_id}}\",\"file_hash\":\"{{$json.body.file_hash}}\",\"filename\":\"{{$json.body.filename}}\",\"mime_type\":\"{{$json.body.mime_type}}\",\"file_content_base64\":\"{{$json.body.file_content_base64}}\"}"
       },
       "id": "call_notarization_api",
       "name": "Call Notarization API",

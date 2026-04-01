@@ -134,6 +134,30 @@ Success:
 
 Downloads the notarization certificate file from the stored provider URL and returns it as an attachment.
 
+### `GET /evidence/:evidenceId/file/download`
+
+Downloads the originally uploaded evidence file from stored server-side file storage.
+
+### `POST /evidence/providers/adobe-sign/notarize`
+
+Internal provider adapter request body for n8n:
+
+```json
+{
+  "evidence_id": "evd_123",
+  "filename": "contract.pdf",
+  "mime_type": "application/pdf",
+  "file_content_base64": "JVBERi0xLjQK...",
+  "file_hash": "sha256:abc123"
+}
+```
+
+Returns a provider-shaped payload that n8n can pass into `/evidence/:evidenceId/notarization-result`.
+
+### `POST /evidence/:evidenceId/providers/adobe-sign/sync`
+
+Internal sync endpoint that refreshes Adobe Sign agreement status and writes it back into certificate state.
+
 ## 5. Internal Notarization Callback
 
 ### `POST /evidence/:evidenceId/notarization-result`
@@ -404,6 +428,8 @@ Success:
 - `EVIDENCE_NOT_FOUND`
 - `CERTIFICATE_NOT_FOUND`
 - `CERTIFICATE_DOWNLOAD_FAILED`
+- `FILE_NOT_FOUND`
+- `UNSUPPORTED_PROVIDER`
 - `UNSUPPORTED_STATE`
 - `CERTIFICATE_NOT_READY`
 - `ANCHOR_NOT_FOUND`
