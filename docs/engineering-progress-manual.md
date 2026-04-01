@@ -34,6 +34,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Supabase lookup persistence infrastructure is implemented
 - Evidence upload persistence and n8n trigger structure are implemented
 - Certificate status route can read stored records from Supabase
+- Certificate download route can proxy the stored provider certificate URL
 - Internal notarization callback route is implemented for workflow result persistence
 - Blockchain anchor API skeleton is implemented
 - Legal trigger API skeleton is implemented
@@ -47,6 +48,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Credit lookup API route is wired to SEC EDGAR and California SOS with first-pass grading rules
 - Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
+- Certificate download route depends on the provider certificate URL remaining available
 - Blockchain anchor route persists a first-pass anchor record, but still uses a mock anchor provider
 - Legal trigger route persists first-pass case intake state, but does not yet generate demand letters or evidence bundles
 - Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
@@ -113,6 +115,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - company lookup logging can write to Supabase when credentials are present
 - evidence metadata can write to Supabase and trigger n8n webhook when configured
 - certificate route can return stored status instead of placeholder data
+- certificate download route can return the provider certificate file as an attachment
 - blockchain anchor route can persist and read stored anchor state when schema is present
 - legal trigger route can persist and read stored intake state when schema is present
 - demand letter route can generate and read stored draft state when schema is present

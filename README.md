@@ -61,6 +61,7 @@ Create environment files from:
 - `POST /v1/credit/lookup` now supports free SEC EDGAR lookups and optional California SOS lookups
 - `POST /v1/evidence/upload` now persists evidence metadata and triggers n8n when configured
 - `GET /v1/evidence/:evidenceId/certificate` now returns stored certificate state when available
+- `GET /v1/evidence/:evidenceId/certificate/download` now downloads the stored notarization certificate as an attachment
 - `POST /v1/evidence/:evidenceId/anchor` now creates a first-pass blockchain anchor record after certificate completion
 - `GET /v1/evidence/:evidenceId/anchor` now returns stored anchor state when available
 - `POST /v1/legal/trigger` now creates a first-pass legal intake record after evidence notarization and anchoring

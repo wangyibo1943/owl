@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { extname } from 'node:path';
 import { SupabaseService } from '../database/supabase.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import { RecordNotarizationResultDto } from './dto/record-notarization-result.dto';
@@ -31,6 +32,12 @@ type NotarizationCertificateRecord = {
   provider_payload: Record<string, unknown> | null;
   status: string;
   created_at: string;
+};
+
+type CertificateDownloadResult = {
+  content: Buffer;
+  content_type: string;
+  file_name: string;
 };
 
 @Injectable()
@@ -142,6 +149,70 @@ export class EvidenceService {
     };
   }
 
+  async downloadCertificate(evidenceId: string): Promise<CertificateDownloadResult> {
+    const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
+      'evidence_records',
+      {
+        id: evidenceId,
+      },
+    );
+
+    if (!evidence) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'EVIDENCE_NOT_FOUND',
+        message: 'Evidence record was not found',
+      });
+    }
+
+    const certificate =
+      await this.supabaseService.findFirst<NotarizationCertificateRecord>(
+        'notarization_certificates',
+        {
+          evidence_id: evidenceId,
+        },
+        {
+          orderBy: 'created_at',
+          ascending: false,
+        },
+      );
+
+    if (!certificate || !certificate.certificate_url) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'CERTIFICATE_NOT_FOUND',
+        message: 'Certificate file was not found',
+      });
+    }
+
+    const response = await fetch(certificate.certificate_url);
+
+    if (!response.ok) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'CERTIFICATE_DOWNLOAD_FAILED',
+        message: 'Certificate file could not be downloaded',
+      });
+    }
+
+    const contentType =
+      response.headers.get('content-type')?.split(';')[0].trim() ||
+      'application/octet-stream';
+    const content = Buffer.from(await response.arrayBuffer());
+    const fileName = this.buildCertificateFileName({
+      evidence,
+      certificate,
+      contentType,
+      certificateUrl: certificate.certificate_url,
+    });
+
+    return {
+      content,
+      content_type: contentType,
+      file_name: fileName,
+    };
+  }
+
   async recordNotarizationResult(
     evidenceId: string,
     payload: RecordNotarizationResultDto,
@@ -240,6 +311,40 @@ export class EvidenceService {
   private buildStoragePath(evidenceId: string, filename: string) {
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     return `evidence/${evidenceId}/${sanitizedFilename}`;
+  }
+
+  private buildCertificateFileName(input: {
+    evidence: EvidenceRecord;
+    certificate: NotarizationCertificateRecord;
+    contentType: string;
+    certificateUrl: string;
+  }) {
+    const baseName = input.evidence.filename.replace(/\.[^.]+$/, '');
+    const normalizedBaseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const providerId =
+      input.certificate.provider_certificate_id?.replace(/[^a-zA-Z0-9._-]/g, '_') ||
+      input.certificate.id;
+    const extension =
+      this.extensionFromContentType(input.contentType) ||
+      extname(new URL(input.certificateUrl).pathname) ||
+      '.bin';
+
+    return `${normalizedBaseName}-certificate-${providerId}${extension}`;
+  }
+
+  private extensionFromContentType(contentType: string) {
+    switch (contentType) {
+      case 'application/pdf':
+        return '.pdf';
+      case 'application/json':
+        return '.json';
+      case 'text/plain':
+        return '.txt';
+      case 'application/zip':
+        return '.zip';
+      default:
+        return '';
+    }
   }
 
   private async triggerNotarizationWorkflow(

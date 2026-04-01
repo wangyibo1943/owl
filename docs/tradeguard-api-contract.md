@@ -127,6 +127,10 @@ Success:
 }
 ```
 
+### `GET /evidence/:evidenceId/certificate/download`
+
+Downloads the notarization certificate file from the stored provider URL and returns it as an attachment.
+
 ## 5. Internal Notarization Callback
 
 ### `POST /evidence/:evidenceId/notarization-result`
@@ -395,6 +399,8 @@ Success:
 - `PROVIDER_ERROR`
 - `VALIDATION_ERROR`
 - `EVIDENCE_NOT_FOUND`
+- `CERTIFICATE_NOT_FOUND`
+- `CERTIFICATE_DOWNLOAD_FAILED`
 - `UNSUPPORTED_STATE`
 - `CERTIFICATE_NOT_READY`
 - `ANCHOR_NOT_FOUND`
