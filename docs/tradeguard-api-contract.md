@@ -167,6 +167,7 @@ Adobe Sign webhook verification endpoint. It echoes `X-AdobeSign-ClientId` in th
 Adobe Sign webhook ingestion endpoint. Current behavior:
 
 - accepts Adobe webhook JSON payloads
+- optionally validates `X-AdobeSign-ClientId` against the backend allow-list
 - extracts the agreement id
 - fetches the latest agreement state from Adobe
 - writes the normalized status back into `notarization_certificates`

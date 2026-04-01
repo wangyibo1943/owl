@@ -69,6 +69,7 @@ Create environment files from:
 - `POST /v1/evidence/providers/adobe-sign/sync-pending` now supports batch Adobe Sign refreshes for server-side polling
 - `GET /v1/evidence/providers/adobe-sign/webhook` now supports Adobe Sign webhook verification
 - `POST /v1/evidence/providers/adobe-sign/webhook` now supports Adobe Sign webhook-driven status refresh
+- Adobe webhook routes now support allow-list validation through `ADOBE_SIGN_WEBHOOK_CLIENT_ID` or `ADOBE_SIGN_WEBHOOK_ALLOWED_CLIENT_IDS`
 - `POST /v1/evidence/:evidenceId/anchor` now creates a first-pass blockchain anchor record after certificate completion
 - `GET /v1/evidence/:evidenceId/anchor` now returns stored anchor state when available
 - `POST /v1/legal/trigger` now creates a first-pass legal intake record after evidence notarization and anchoring

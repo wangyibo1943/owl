@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Headers, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { EvidenceService } from './evidence.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
@@ -72,6 +81,8 @@ export class EvidenceController {
       process.env.ADOBE_SIGN_WEBHOOK_CLIENT_ID?.trim() ||
       null;
 
+    this.assertAllowedAdobeWebhookClientId(echoedClientId);
+
     if (echoedClientId) {
       res.setHeader('X-AdobeSign-ClientId', echoedClientId);
     }
@@ -93,6 +104,8 @@ export class EvidenceController {
       process.env.ADOBE_SIGN_WEBHOOK_CLIENT_ID?.trim() ||
       null;
 
+    this.assertAllowedAdobeWebhookClientId(echoedClientId);
+
     if (echoedClientId) {
       res.setHeader('X-AdobeSign-ClientId', echoedClientId);
     }
@@ -111,5 +124,26 @@ export class EvidenceController {
     @Body() payload: RecordNotarizationResultDto,
   ) {
     return this.evidenceService.recordNotarizationResult(evidenceId, payload);
+  }
+
+  private assertAllowedAdobeWebhookClientId(clientId: string | null) {
+    const configuredClientIds = [
+      process.env.ADOBE_SIGN_WEBHOOK_CLIENT_ID?.trim() || null,
+      ...(process.env.ADOBE_SIGN_WEBHOOK_ALLOWED_CLIENT_IDS?.split(',') ?? []),
+    ]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value));
+
+    if (configuredClientIds.length === 0) {
+      return;
+    }
+
+    if (!clientId || !configuredClientIds.includes(clientId)) {
+      throw new ForbiddenException({
+        success: false,
+        error_code: 'INVALID_WEBHOOK_CLIENT_ID',
+        message: 'Adobe webhook client id is not allowed',
+      });
+    }
   }
 }

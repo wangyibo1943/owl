@@ -38,6 +38,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Certificate download route can proxy the stored provider certificate URL
 - Adobe Sign provider adapter routes are implemented in the backend
 - Adobe Sign webhook verification and ingestion routes are implemented in the backend
+- Adobe webhook routes support client-id allow-list validation when configured
 - Uploaded evidence files are now written to Supabase Storage object storage
 - Internal notarization callback route is implemented for workflow result persistence
 - Blockchain anchor API skeleton is implemented

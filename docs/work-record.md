@@ -59,6 +59,7 @@ It answers two questions quickly:
 - Adobe Sign pending sync endpoint added
 - Adobe Sign webhook verification endpoint added
 - Adobe Sign webhook ingestion endpoint added
+- Adobe Sign webhook allow-list validation added
 
 ### Chain and Legal Flow
 
