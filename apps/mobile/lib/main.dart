@@ -21,7 +21,7 @@ class TradeGuardApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: seed),
         scaffoldBackgroundColor: const Color(0xFFF5F7F4),
         useMaterial3: true,
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: Colors.white,
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
@@ -161,7 +161,7 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _selectedState,
+                  initialValue: _selectedState,
                   decoration: const InputDecoration(
                     labelText: 'State registry hint',
                   ),
@@ -603,7 +603,7 @@ class _GradeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

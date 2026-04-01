@@ -76,7 +76,9 @@ export class EvidenceService {
     const storagePath = this.buildStoragePath(evidenceId, payload.filename);
 
     await this.fileStorageService.ensureWritable();
-    await this.fileStorageService.saveFile(storagePath, decoded);
+    await this.fileStorageService.saveFile(storagePath, decoded, {
+      contentType: payload.mime_type,
+    });
 
     await this.supabaseService.insert('evidence_records', {
       id: evidenceId,

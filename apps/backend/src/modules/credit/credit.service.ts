@@ -10,6 +10,7 @@ import { SupabaseService } from '../database/supabase.service';
 type NormalizedCompanyRecord = {
   name: string;
   registrationNumber: string | null;
+  lei: string | null;
   ticker: string | null;
   entityType: string | null;
   jurisdiction: string | null;
@@ -19,7 +20,7 @@ type NormalizedCompanyRecord = {
   sicCode: string | null;
   sicDescription: string | null;
   website: string | null;
-  sourceName: 'California SOS' | 'SEC EDGAR';
+  sourceName: 'California SOS' | 'SEC EDGAR' | 'GLEIF';
   sourceUrl: string | null;
   agentName: string | null;
   agentAddress1: string | null;
@@ -86,6 +87,7 @@ export class CreditService {
     const evaluation = this.evaluateRisk(company);
     const responsePayload = {
       company_name: company.name,
+      lei: company.lei,
       ticker: company.ticker,
       entity_type: company.entityType,
       jurisdiction: company.jurisdiction,
@@ -143,7 +145,21 @@ export class CreditService {
 
     const secMatch = await this.lookupSecCompany(companyName, website);
     if (secMatch) {
-      return secMatch;
+      if (secMatch.matchConfidence === 'HIGH' || Boolean(website)) {
+        return secMatch;
+      }
+
+      const gleifMatch = await this.lookupGleifCompany(companyName);
+      if (!gleifMatch) {
+        return secMatch;
+      }
+
+      return gleifMatch.matchConfidence === 'HIGH' ? gleifMatch : secMatch;
+    }
+
+    const gleifMatch = await this.lookupGleifCompany(companyName);
+    if (gleifMatch) {
+      return gleifMatch;
     }
 
     if (process.env.CALIFORNIA_SOS_API_KEY) {
@@ -246,6 +262,7 @@ export class CreditService {
     return {
       name: String(entity.EntityName ?? 'Unknown Entity'),
       registrationNumber: entity.EntityID ? String(entity.EntityID) : null,
+      lei: null,
       ticker: null,
       entityType: entity.EntityType ? String(entity.EntityType) : null,
       jurisdiction: entity.Jurisdiction
@@ -409,6 +426,7 @@ export class CreditService {
           companyName,
       ),
       registrationNumber: `CIK ${bestCandidate.cik}`,
+      lei: null,
       ticker: bestCandidate.company.ticker ? String(bestCandidate.company.ticker) : null,
       entityType,
       jurisdiction: stateOfIncorporation ? `US-${stateOfIncorporation}` : 'US',
@@ -432,6 +450,186 @@ export class CreditService {
       supportsIncorporationDate: false,
       matchConfidence: this.mapMatchConfidence(bestCandidate.score),
       rawPayload: bestCandidate.submissions,
+    };
+  }
+
+  private async lookupGleifCompany(
+    companyName: string,
+  ): Promise<NormalizedCompanyRecord | null> {
+    const fuzzyUrl = new URL('https://api.gleif.org/api/v1/fuzzycompletions');
+    fuzzyUrl.searchParams.set('field', 'entity.legalName');
+    fuzzyUrl.searchParams.set('q', companyName);
+
+    const fuzzyResponse = await fetch(fuzzyUrl, {
+      headers: {
+        accept: 'application/json',
+      },
+    });
+
+    if (!fuzzyResponse.ok) {
+      throw new InternalServerErrorException({
+        success: false,
+        error_code: 'UPSTREAM_PROVIDER_ERROR',
+        message: `GLEIF fuzzy search returned ${fuzzyResponse.status}`,
+      });
+    }
+
+    const fuzzyPayload = (await fuzzyResponse.json()) as {
+      data?: Array<{
+        attributes?: {
+          value?: string;
+        };
+        relationships?: {
+          'lei-records'?: {
+            data?: {
+              id?: string;
+            };
+            links?: {
+              related?: string;
+            };
+          };
+        };
+      }>;
+    };
+
+    const normalizedTarget = this.normalizeCompanyName(companyName);
+    const candidates = (fuzzyPayload.data ?? [])
+      .map((entry) => ({
+        id: entry.relationships?.['lei-records']?.data?.id ?? null,
+        related: entry.relationships?.['lei-records']?.links?.related ?? null,
+        score: this.scoreNameMatch(entry.attributes?.value ?? '', normalizedTarget),
+      }))
+      .filter((entry) => entry.id && entry.related && entry.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3);
+
+    for (const candidate of candidates) {
+      const detailResponse = await fetch(candidate.related!, {
+        headers: {
+          accept: 'application/json',
+        },
+      });
+
+      if (!detailResponse.ok) {
+        continue;
+      }
+
+      const detailPayload = (await detailResponse.json()) as {
+        data?: {
+          id?: string;
+          attributes?: {
+            entity?: Record<string, unknown>;
+            registration?: Record<string, unknown>;
+          };
+        };
+      };
+
+      if (!detailPayload.data?.attributes?.entity) {
+        continue;
+      }
+
+      return this.mapGleifEntity(
+        detailPayload.data.id ?? null,
+        detailPayload.data.attributes.entity,
+        detailPayload.data.attributes.registration ?? {},
+        candidate.score,
+      );
+    }
+
+    return null;
+  }
+
+  private mapGleifEntity(
+    lei: string | null,
+    entity: Record<string, unknown>,
+    registration: Record<string, unknown>,
+    score: number,
+  ): NormalizedCompanyRecord {
+    const legalAddress =
+      entity.legalAddress && typeof entity.legalAddress === 'object'
+        ? (entity.legalAddress as Record<string, unknown>)
+        : null;
+    const headquartersAddress =
+      entity.headquartersAddress && typeof entity.headquartersAddress === 'object'
+        ? (entity.headquartersAddress as Record<string, unknown>)
+        : null;
+
+    return {
+      name:
+        entity.legalName &&
+        typeof entity.legalName === 'object' &&
+        'name' in entity.legalName
+          ? String((entity.legalName as Record<string, unknown>).name)
+          : 'Unknown Entity',
+      registrationNumber:
+        entity.registeredAs && String(entity.registeredAs).trim().length > 0
+          ? String(entity.registeredAs).trim()
+          : null,
+      lei,
+      ticker: null,
+      entityType:
+        entity.category && String(entity.category).trim().length > 0
+          ? String(entity.category).trim()
+          : null,
+      jurisdiction:
+        entity.jurisdiction && String(entity.jurisdiction).trim().length > 0
+          ? String(entity.jurisdiction).trim().toUpperCase()
+          : null,
+      status:
+        entity.status && String(entity.status).trim().length > 0
+          ? String(entity.status).trim()
+          : null,
+      incorporationDate:
+        entity.creationDate && String(entity.creationDate).trim().length > 0
+          ? String(entity.creationDate).slice(0, 10)
+          : null,
+      lastFilingDate:
+        registration.lastUpdateDate &&
+        String(registration.lastUpdateDate).trim().length > 0
+          ? String(registration.lastUpdateDate).slice(0, 10)
+          : null,
+      sicCode: null,
+      sicDescription:
+        registration.status && String(registration.status).trim().length > 0
+          ? `LEI ${String(registration.status).trim()}`
+          : null,
+      website: null,
+      sourceName: 'GLEIF',
+      sourceUrl: lei
+        ? `https://search.gleif.org/#/record/${encodeURIComponent(lei)}`
+        : null,
+      agentName: null,
+      agentAddress1:
+        Array.isArray(legalAddress?.addressLines) && legalAddress.addressLines.length > 0
+          ? String(legalAddress.addressLines[0])
+          : null,
+      agentAddress2:
+        Array.isArray(legalAddress?.addressLines) && legalAddress.addressLines.length > 1
+          ? String(legalAddress.addressLines[1])
+          : null,
+      agentCity:
+        legalAddress?.city && String(legalAddress.city).trim().length > 0
+          ? String(legalAddress.city).trim()
+          : headquartersAddress?.city && String(headquartersAddress.city).trim().length > 0
+            ? String(headquartersAddress.city).trim()
+            : null,
+      agentState:
+        legalAddress?.region && String(legalAddress.region).trim().length > 0
+          ? String(legalAddress.region).trim()
+          : null,
+      agentZipCode:
+        legalAddress?.postalCode && String(legalAddress.postalCode).trim().length > 0
+          ? String(legalAddress.postalCode).trim()
+          : null,
+      inactive: String(entity.status ?? '').trim().toUpperCase() !== 'ACTIVE',
+      branch: false,
+      supportsRegistryStatus: true,
+      supportsIncorporationDate: true,
+      matchConfidence: this.mapMatchConfidence(score),
+      rawPayload: {
+        entity,
+        registration,
+      },
     };
   }
 
@@ -481,6 +679,11 @@ export class CreditService {
     if (company.sourceName === 'SEC EDGAR' && !company.website) {
       score -= 5;
       riskFlags.push('MISSING_PUBLIC_WEBSITE');
+    }
+
+    if (company.sourceName === 'GLEIF' && !company.lei) {
+      score -= 10;
+      riskFlags.push('MISSING_LEI');
     }
 
     if (company.sourceName === 'SEC EDGAR' && !company.ticker) {

@@ -10,13 +10,13 @@ Current flows:
 
 Notes:
 
-- Flutter CLI is not installed on this machine, so the app was updated but not compiled locally here.
+- Flutter toolchain is installed and local builds have been validated on this machine.
 - The default API base URL is `http://wehom.net/v1`.
-- If you run this on iOS, add an ATS exception or move the backend to HTTPS first, because Apple blocks plain HTTP by default.
+- iOS ATS exception for `wehom.net` is already configured for current testing.
 
-Recommended next steps on a Flutter-enabled machine:
+Validated locally:
 
-1. `flutter create .`
-2. preserve the existing `lib/` files
-3. run `flutter pub get`
-4. run with `--dart-define=API_BASE_URL=http://wehom.net/v1`
+1. `flutter analyze`
+2. `flutter test`
+3. `flutter build ios --simulator --no-codesign`
+4. `flutter build apk --debug`
