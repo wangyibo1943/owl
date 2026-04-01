@@ -66,6 +66,7 @@ Create environment files from:
 - `POST /v1/legal/trigger` now creates a first-pass legal intake record after evidence notarization and anchoring
 - `GET /v1/legal/triggers/:triggerId` now returns stored legal trigger state when available
 - `POST /v1/legal/triggers/:triggerId/demand-letter` now generates and stores a first-pass demand letter draft
+- `POST /v1/legal/triggers/:triggerId/bundle` now generates and stores a first-pass evidence bundle manifest
 
 ## Key Docs
 

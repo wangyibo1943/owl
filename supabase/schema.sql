@@ -83,6 +83,16 @@ create table if not exists public.demand_letters (
     created_at timestamptz not null default now()
 );
 
+create table if not exists public.evidence_bundles (
+    id uuid primary key default gen_random_uuid(),
+    legal_trigger_id uuid not null references public.legal_triggers(id) on delete cascade,
+    manifest_json jsonb not null,
+    bundle_url text,
+    review_status text not null default 'GENERATED',
+    provider_payload jsonb,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists public.workflow_logs (
     id uuid primary key default gen_random_uuid(),
     workflow_name text not null,
@@ -109,3 +119,6 @@ create unique index if not exists idx_legal_triggers_evidence_id
 
 create index if not exists idx_demand_letters_legal_trigger_id
     on public.demand_letters(legal_trigger_id);
+
+create index if not exists idx_evidence_bundles_legal_trigger_id
+    on public.evidence_bundles(legal_trigger_id);

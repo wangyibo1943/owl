@@ -20,4 +20,9 @@ export class LegalController {
   generateDemandLetter(@Param('triggerId') triggerId: string) {
     return this.legalService.generateDemandLetter(triggerId);
   }
+
+  @Post('triggers/:triggerId/bundle')
+  generateEvidenceBundle(@Param('triggerId') triggerId: string) {
+    return this.legalService.generateEvidenceBundle(triggerId);
+  }
 }
