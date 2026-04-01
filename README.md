@@ -80,3 +80,5 @@ Create environment files from:
 - [Engineering Progress Manual](/Users/leo/owl/docs/engineering-progress-manual.md)
 - [Context Handoff Manual](/Users/leo/owl/docs/context-handoff-manual.md)
 - [Litigation Trigger Module](/Users/leo/owl/docs/litigation-trigger-module.md)
+- [Document Delivery Audit](/Users/leo/owl/docs/document-delivery-audit.md)
+- [Work Record](/Users/leo/owl/docs/work-record.md)

@@ -52,9 +52,9 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
 - Certificate download route depends on the provider certificate URL remaining available
 - Blockchain anchor route persists a first-pass anchor record, but still uses a mock anchor provider
-- Legal trigger route persists first-pass case intake state, but does not yet generate demand letters or evidence bundles
+- Legal trigger route persists first-pass case intake state, but still depends on follow-up generation endpoints for a complete dispute package
 - Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
-- Evidence bundle route generates a stored manifest, but does not yet export a real ZIP package
+- Evidence bundle route now generates a real ZIP package, but the archive is still stored on the app server
 - Lawyer handoff route prepares a structured handoff packet, but does not yet send it to an external law firm system
 - Bundle download route now exports a real ZIP artifact, but it is still a local server-side archive rather than object storage delivery
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
@@ -68,8 +68,6 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Real notarization provider integration
 - Real notification delivery
 - Blockchain anchoring implementation
-- Evidence bundle generation
-- Lawyer handoff connector
 - Authentication
 - Payment logic
 
@@ -136,10 +134,8 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - workflow callback contract exists, but has not been exercised against a live n8n instance
 - legal trigger workflow steps after intake are not implemented yet
 - demand letter export artifacts are not implemented yet
-- evidence bundle ZIP export is not implemented yet
 - lawyer handoff is not connected to a real external intake or email delivery system yet
 - generated bundle files are stored on the app server and not yet mirrored to object storage
-- live Supabase still needs the latest `legal_triggers` table migration before `/v1/legal/trigger` can persist records
 
 ## Build and Run Notes
 
@@ -233,8 +229,8 @@ Action:
 4. Connect n8n workflow to real provider and verify certificate callback persistence
 5. Add certificate result polling or webhook callback completion
 6. Add blockchain anchor after notarization
-7. Add legal trigger intake and state transitions
-8. Add lawyer handoff connector
+7. Replace test provider with a real notarization provider
+8. Improve California and SEC credit confidence rules
 9. Replace placeholder demand letter export with PDF or DOCX
 10. Move generated bundle artifacts to object storage
 11. Generate and wire full Flutter project
