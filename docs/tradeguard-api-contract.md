@@ -347,6 +347,18 @@ Success:
 }
 ```
 
+### `GET /legal/triggers/:triggerId/bundle`
+
+Returns the stored bundle metadata and manifest.
+
+### `GET /legal/triggers/:triggerId/bundle/download`
+
+Downloads a real ZIP archive containing:
+
+- `README.txt`
+- `manifest.json`
+- `demand-letter.txt` when a demand letter exists
+
 ### `POST /legal/triggers/:triggerId/handoff`
 
 Success:

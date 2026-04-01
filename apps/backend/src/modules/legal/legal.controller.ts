@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { LegalService } from './legal.service';
 import { CreateLegalTriggerDto } from './dto/create-legal-trigger.dto';
 
@@ -24,6 +25,21 @@ export class LegalController {
   @Post('triggers/:triggerId/bundle')
   generateEvidenceBundle(@Param('triggerId') triggerId: string) {
     return this.legalService.generateEvidenceBundle(triggerId);
+  }
+
+  @Get('triggers/:triggerId/bundle')
+  getEvidenceBundle(@Param('triggerId') triggerId: string) {
+    return this.legalService.getEvidenceBundle(triggerId);
+  }
+
+  @Get('triggers/:triggerId/bundle/download')
+  async downloadEvidenceBundle(
+    @Param('triggerId') triggerId: string,
+    @Res() res: Response,
+  ) {
+    const bundle = await this.legalService.getEvidenceBundleDownload(triggerId);
+
+    return res.download(bundle.file_path, bundle.file_name);
   }
 
   @Post('triggers/:triggerId/handoff')

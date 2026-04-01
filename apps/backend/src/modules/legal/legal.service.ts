@@ -4,6 +4,10 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { access, mkdir, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { join } from 'node:path';
+import JSZip = require('jszip');
 import { SupabaseService } from '../database/supabase.service';
 import { CreateLegalTriggerDto } from './dto/create-legal-trigger.dto';
 
@@ -74,6 +78,12 @@ type EvidenceBundleRecord = {
   review_status: string;
   provider_payload: Record<string, unknown> | null;
   created_at: string;
+};
+
+type BundleArtifact = {
+  file_path: string;
+  file_name: string;
+  download_url: string;
 };
 
 @Injectable()
@@ -392,13 +402,6 @@ export class LegalService {
       },
     );
 
-    if (existingBundle) {
-      return {
-        success: true,
-        data: this.mapEvidenceBundleResponse(existingBundle, trigger),
-      };
-    }
-
     const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
       'evidence_records',
       {
@@ -445,18 +448,79 @@ export class LegalService {
       certificate,
       letter,
     });
+    const artifact = await this.writeEvidenceBundleArchive({
+      trigger,
+      manifest,
+      demandLetterText: letter?.draft_text ?? null,
+    });
+
+    if (existingBundle) {
+      await this.supabaseService.update(
+        'evidence_bundles',
+        { id: existingBundle.id },
+        {
+          manifest_json: manifest,
+          bundle_url: artifact.download_url,
+          review_status: 'GENERATED',
+          provider_payload: {
+            generator: 'TradeGuardBundleEngine',
+            evidence_id: trigger.evidence_id,
+            includes_demand_letter: Boolean(letter),
+            archive_file_name: artifact.file_name,
+          },
+        },
+      );
+
+      await this.supabaseService.update(
+        'legal_triggers',
+        { id: triggerId },
+        {
+          bundle_status: 'GENERATED',
+          bundle_url: artifact.download_url,
+        },
+      );
+
+      await this.supabaseService.insert('workflow_logs', {
+        workflow_name: 'TradeGuard_Evidence_Bundle',
+        reference_id: triggerId,
+        status: 'REGENERATED',
+        payload: {
+          legal_trigger_id: triggerId,
+          evidence_bundle_id: existingBundle.id,
+          bundle_url: artifact.download_url,
+        },
+      });
+
+      return {
+        success: true,
+        data: this.mapEvidenceBundleResponse(
+          {
+            ...existingBundle,
+            manifest_json: manifest,
+            bundle_url: artifact.download_url,
+            review_status: 'GENERATED',
+          },
+          {
+            ...trigger,
+            bundle_status: 'GENERATED',
+            bundle_url: artifact.download_url,
+          },
+        ),
+      };
+    }
 
     const inserted = await this.supabaseService.insert<EvidenceBundleRecord>(
       'evidence_bundles',
       {
         legal_trigger_id: triggerId,
         manifest_json: manifest,
-        bundle_url: `tradeguard://legal-bundles/${triggerId}`,
+        bundle_url: artifact.download_url,
         review_status: 'GENERATED',
         provider_payload: {
           generator: 'TradeGuardBundleEngine',
           evidence_id: trigger.evidence_id,
           includes_demand_letter: Boolean(letter),
+          archive_file_name: artifact.file_name,
         },
       },
     );
@@ -474,7 +538,7 @@ export class LegalService {
       { id: triggerId },
       {
         bundle_status: 'GENERATED',
-        bundle_url: inserted.bundle_url,
+        bundle_url: artifact.download_url,
       },
     );
 
@@ -485,7 +549,7 @@ export class LegalService {
       payload: {
         legal_trigger_id: triggerId,
         evidence_bundle_id: inserted.id,
-        bundle_url: inserted.bundle_url,
+        bundle_url: artifact.download_url,
       },
     });
 
@@ -494,9 +558,85 @@ export class LegalService {
       data: this.mapEvidenceBundleResponse(inserted, {
         ...trigger,
         bundle_status: 'GENERATED',
-        bundle_url: inserted.bundle_url,
+        bundle_url: artifact.download_url,
       }),
     };
+  }
+
+  async getEvidenceBundle(triggerId: string) {
+    const trigger = await this.supabaseService.findFirst<LegalTriggerRecord>(
+      'legal_triggers',
+      {
+        id: triggerId,
+      },
+    );
+
+    if (!trigger) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'LEGAL_TRIGGER_NOT_FOUND',
+        message: 'Legal trigger record was not found',
+      });
+    }
+
+    const bundle = await this.supabaseService.findFirst<EvidenceBundleRecord>(
+      'evidence_bundles',
+      {
+        legal_trigger_id: triggerId,
+      },
+      {
+        orderBy: 'created_at',
+        ascending: false,
+      },
+    );
+
+    if (!bundle) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'BUNDLE_NOT_READY',
+        message: 'Evidence bundle was not found',
+      });
+    }
+
+    return {
+      success: true,
+      data: this.mapEvidenceBundleResponse(bundle, trigger),
+    };
+  }
+
+  async getEvidenceBundleDownload(triggerId: string) {
+    const bundle = await this.supabaseService.findFirst<EvidenceBundleRecord>(
+      'evidence_bundles',
+      {
+        legal_trigger_id: triggerId,
+      },
+      {
+        orderBy: 'created_at',
+        ascending: false,
+      },
+    );
+
+    if (!bundle) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'BUNDLE_NOT_READY',
+        message: 'Evidence bundle was not found',
+      });
+    }
+
+    const artifact = this.buildBundleArtifact(triggerId);
+
+    try {
+      await access(artifact.file_path, fsConstants.R_OK);
+    } catch {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'BUNDLE_FILE_NOT_FOUND',
+        message: 'Evidence bundle file was not found',
+      });
+    }
+
+    return artifact;
   }
 
   async generateLawyerHandoff(triggerId: string) {
@@ -677,6 +817,71 @@ export class LegalService {
       manifest: bundle.manifest_json,
       created_at: bundle.created_at,
     };
+  }
+
+  private async writeEvidenceBundleArchive(input: {
+    trigger: LegalTriggerRecord;
+    manifest: Record<string, unknown>;
+    demandLetterText: string | null;
+  }) {
+    const artifact = this.buildBundleArtifact(input.trigger.id);
+    const zip = new JSZip();
+
+    zip.file(
+      'README.txt',
+      [
+        'TradeGuard Evidence Bundle',
+        `Legal Trigger ID: ${input.trigger.id}`,
+        `Generated At: ${new Date().toISOString()}`,
+      ].join('\n'),
+    );
+    zip.file('manifest.json', JSON.stringify(input.manifest, null, 2));
+
+    if (input.demandLetterText) {
+      zip.file('demand-letter.txt', input.demandLetterText);
+    }
+
+    const buffer = await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: {
+        level: 9,
+      },
+    });
+
+    await mkdir(join(process.cwd(), 'generated', 'legal-bundles'), {
+      recursive: true,
+    });
+    await writeFile(artifact.file_path, buffer);
+
+    return artifact;
+  }
+
+  private buildBundleArtifact(triggerId: string): BundleArtifact {
+    const fileName = `tradeguard-legal-bundle-${triggerId}.zip`;
+    const filePath = join(
+      process.cwd(),
+      'generated',
+      'legal-bundles',
+      fileName,
+    );
+
+    return {
+      file_name: fileName,
+      file_path: filePath,
+      download_url: `${this.getApiBaseUrl()}/v1/legal/triggers/${triggerId}/bundle/download`,
+    };
+  }
+
+  private getApiBaseUrl() {
+    const explicitBaseUrl = process.env.TRADEGUARD_API_BASE_URL?.trim();
+
+    if (explicitBaseUrl) {
+      return explicitBaseUrl.replace(/\/$/, '');
+    }
+
+    const port = process.env.PORT?.trim() || '3000';
+    return `http://localhost:${port}`;
   }
 
   private buildDemandLetterDraft(input: {

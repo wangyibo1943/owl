@@ -40,6 +40,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Demand letter draft API skeleton is implemented
 - Evidence bundle API skeleton is implemented
 - Lawyer handoff API skeleton is implemented
+- Evidence bundle ZIP export is implemented
 
 ### Partially Completed
 
@@ -51,6 +52,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
 - Evidence bundle route generates a stored manifest, but does not yet export a real ZIP package
 - Lawyer handoff route prepares a structured handoff packet, but does not yet send it to an external law firm system
+- Bundle download route now exports a real ZIP artifact, but it is still a local server-side archive rather than object storage delivery
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
 - Flutter app screens exist as a manual skeleton, not a generated Flutter project
 
@@ -116,6 +118,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - demand letter route can generate and read stored draft state when schema is present
 - evidence bundle route can generate and read stored manifest state when schema is present
 - lawyer handoff route can assemble a structured intake packet without new schema changes
+- bundle download route can return a real archive file for a generated legal bundle
 - backend is deployed on the server and health endpoint responds from `wehom.net`
 - anchor route has been exercised against live Supabase with a completed evidence record
 
@@ -130,6 +133,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - demand letter export artifacts are not implemented yet
 - evidence bundle ZIP export is not implemented yet
 - lawyer handoff is not connected to a real external intake or email delivery system yet
+- generated bundle files are stored on the app server and not yet mirrored to object storage
 - live Supabase still needs the latest `legal_triggers` table migration before `/v1/legal/trigger` can persist records
 
 ## Build and Run Notes
@@ -226,8 +230,9 @@ Action:
 6. Add blockchain anchor after notarization
 7. Add legal trigger intake and state transitions
 8. Add lawyer handoff connector
-9. Replace placeholder demand letter and bundle exports with real files
-10. Generate and wire full Flutter project
+9. Replace placeholder demand letter export with PDF or DOCX
+10. Move generated bundle artifacts to object storage
+11. Generate and wire full Flutter project
 
 ## Definition of “Ready for Demo”
 
