@@ -1,0 +1,44 @@
+{
+  "info": {
+    "name": "TradeGuard MVP",
+    "_postman_id": "0bf0ab79-c207-4f47-b771-e42686459043",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/v1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Credit Lookup",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"company_name\": \"Apple Inc.\",\n  \"website\": \"https://apple.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/credit/lookup",
+          "host": ["{{baseUrl}}"],
+          "path": ["credit", "lookup"]
+        }
+      }
+    }
+  ]
+}

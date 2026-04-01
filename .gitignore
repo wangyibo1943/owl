@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.local
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+node_modules/
+dist/
+.idea/
+.vscode/
+

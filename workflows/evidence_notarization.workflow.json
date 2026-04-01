@@ -1,0 +1,64 @@
+{
+  "name": "TradeGuard_Evidence_Notarization",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "tradeguard-evidence-notarization",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_evidence",
+      "name": "Evidence Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto'); const payload = $json.body ?? {}; const buffer = Buffer.from(payload.file_content_base64 ?? '', 'base64'); const hash = crypto.createHash('sha256').update(buffer).digest('hex'); return [{ ...payload, file_hash: `sha256:${hash}` }];"
+      },
+      "id": "hash_file",
+      "name": "Hash File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.NOTARIZATION_API_URL}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"file_hash\":\"{{$json.file_hash}}\",\"filename\":\"{{$json.filename}}\"}"
+      },
+      "id": "call_notarization_api",
+      "name": "Call Notarization API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "id": "respond_notarization",
+      "name": "Respond Notarization",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1040, 240]
+    }
+  ],
+  "connections": {
+    "Evidence Webhook": {
+      "main": [[{ "node": "Hash File", "type": "main", "index": 0 }]]
+    },
+    "Hash File": {
+      "main": [[{ "node": "Call Notarization API", "type": "main", "index": 0 }]]
+    },
+    "Call Notarization API": {
+      "main": [[{ "node": "Respond Notarization", "type": "main", "index": 0 }]]
+    }
+  }
+}
+

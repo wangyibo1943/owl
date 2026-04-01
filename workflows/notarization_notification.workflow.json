@@ -1,0 +1,51 @@
+{
+  "name": "TradeGuard_Notarization_Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "tradeguard-notarization-complete",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_notification",
+      "name": "Notification Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 240]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$env.NOTIFICATION_FROM_EMAIL}}",
+        "toEmail": "={{$json.body.email}}",
+        "subject": "TradeGuard certificate ready",
+        "emailType": "text",
+        "message": "=Your certificate is ready: {{$json.body.certificate_url}}"
+      },
+      "id": "send_email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [520, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\":true}"
+      },
+      "id": "respond_notification",
+      "name": "Respond Notification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 240]
+    }
+  ],
+  "connections": {
+    "Notification Webhook": {
+      "main": [[{ "node": "Send Email", "type": "main", "index": 0 }]]
+    },
+    "Send Email": {
+      "main": [[{ "node": "Respond Notification", "type": "main", "index": 0 }]]
+    }
+  }
+}
+

@@ -1,0 +1,60 @@
+{
+  "name": "TradeGuard_Credit_Lookup",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "tradeguard-credit-lookup",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_credit",
+      "name": "Credit Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 240]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.OPENCORPORATES_BASE_URL}}/companies/search?q={{$json.body.company_name}}&api_token={{$env.OPENCORPORATES_API_KEY}}"
+      },
+      "id": "http_open_corporates",
+      "name": "OpenCorporates Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ success: true, data: { company_name: $json.results?.companies?.[0]?.company?.name ?? null } }];"
+      },
+      "id": "format_credit_response",
+      "name": "Format Credit Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "id": "respond_credit",
+      "name": "Respond Credit",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [980, 240]
+    }
+  ],
+  "connections": {
+    "Credit Webhook": {
+      "main": [[{ "node": "OpenCorporates Search", "type": "main", "index": 0 }]]
+    },
+    "OpenCorporates Search": {
+      "main": [[{ "node": "Format Credit Response", "type": "main", "index": 0 }]]
+    },
+    "Format Credit Response": {
+      "main": [[{ "node": "Respond Credit", "type": "main", "index": 0 }]]
+    }
+  }
+}
+
