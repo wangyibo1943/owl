@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { LegalService } from './legal.service';
 import { CreateLegalTriggerDto } from './dto/create-legal-trigger.dto';
@@ -20,6 +20,26 @@ export class LegalController {
   @Post('triggers/:triggerId/demand-letter')
   generateDemandLetter(@Param('triggerId') triggerId: string) {
     return this.legalService.generateDemandLetter(triggerId);
+  }
+
+  @Get('triggers/:triggerId/demand-letter/download')
+  async downloadDemandLetter(
+    @Param('triggerId') triggerId: string,
+    @Query('format') format: string | undefined,
+    @Res() res: Response,
+  ) {
+    const letter = await this.legalService.getDemandLetterDownload(
+      triggerId,
+      format,
+    );
+
+    res.setHeader('Content-Type', letter.content_type);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${letter.file_name}"`,
+    );
+
+    return res.send(letter.content);
   }
 
   @Post('triggers/:triggerId/bundle')

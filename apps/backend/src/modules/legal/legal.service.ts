@@ -4,10 +4,19 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  AlignmentType,
+  Document,
+  HeadingLevel,
+  Packer,
+  Paragraph,
+  TextRun,
+} from 'docx';
 import { access, readFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join } from 'node:path';
 import JSZip = require('jszip');
+import PDFDocument = require('pdfkit');
 import { SupabaseService } from '../database/supabase.service';
 import { FileStorageService } from '../evidence/file-storage.service';
 import { CreateLegalTriggerDto } from './dto/create-legal-trigger.dto';
@@ -90,6 +99,25 @@ type BundleArtifact = {
 };
 
 type BundleDownloadResult = {
+  content: Buffer;
+  content_type: string;
+  file_name: string;
+};
+
+type DemandLetterArtifact = {
+  file_name: string;
+  storage_path: string;
+  download_url: string;
+  content_type: string;
+  format: 'pdf' | 'docx';
+};
+
+type DemandLetterArtifacts = {
+  pdf: DemandLetterArtifact;
+  docx: DemandLetterArtifact;
+};
+
+type DemandLetterDownloadResult = {
   content: Buffer;
   content_type: string;
   file_name: string;
@@ -336,17 +364,28 @@ export class LegalService {
       certificate,
     });
 
+    const artifacts = await this.writeDemandLetterArtifacts({
+      triggerId,
+      draftText,
+      sellerName: trigger.seller_name,
+      buyerName: trigger.buyer_name,
+    });
+
     const inserted = await this.supabaseService.insert<DemandLetterRecord>(
       'demand_letters',
       {
         legal_trigger_id: triggerId,
         draft_text: draftText,
-        export_url: null,
+        export_url: artifacts.pdf.download_url,
         review_status: 'DRAFT',
         provider_payload: {
           generator: 'TradeGuardTemplateEngine',
           evidence_id: trigger.evidence_id,
           anchor_id: trigger.anchor_id,
+          pdf_url: artifacts.pdf.download_url,
+          pdf_storage_path: artifacts.pdf.storage_path,
+          docx_url: artifacts.docx.download_url,
+          docx_storage_path: artifacts.docx.storage_path,
         },
       },
     );
@@ -364,6 +403,7 @@ export class LegalService {
       { id: triggerId },
       {
         demand_letter_status: 'GENERATED',
+        demand_letter_url: artifacts.pdf.download_url,
       },
     );
 
@@ -384,6 +424,53 @@ export class LegalService {
         ...trigger,
         demand_letter_status: 'GENERATED',
       }),
+    };
+  }
+
+  async getDemandLetterDownload(triggerId: string, format?: string) {
+    const trigger = await this.supabaseService.findFirst<LegalTriggerRecord>(
+      'legal_triggers',
+      {
+        id: triggerId,
+      },
+    );
+
+    if (!trigger) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'LEGAL_TRIGGER_NOT_FOUND',
+        message: 'Legal trigger record was not found',
+      });
+    }
+
+    const letter = await this.supabaseService.findFirst<DemandLetterRecord>(
+      'demand_letters',
+      {
+        legal_trigger_id: triggerId,
+      },
+      {
+        orderBy: 'created_at',
+        ascending: false,
+      },
+    );
+
+    if (!letter) {
+      throw new NotFoundException({
+        success: false,
+        error_code: 'DEMAND_LETTER_NOT_READY',
+        message: 'Demand letter was not found',
+      });
+    }
+
+    const artifacts = await this.ensureDemandLetterArtifacts(trigger, letter);
+    const normalizedFormat = format?.trim().toLowerCase() === 'docx' ? 'docx' : 'pdf';
+    const selected = artifacts[normalizedFormat];
+    const file = await this.fileStorageService.readFile(selected.storage_path);
+
+    return {
+      content: file.content,
+      content_type: selected.content_type,
+      file_name: selected.file_name,
     };
   }
 
@@ -830,6 +917,14 @@ export class LegalService {
       review_status: letter.review_status,
       draft_text: letter.draft_text,
       export_url: letter.export_url,
+      pdf_url:
+        typeof letter.provider_payload?.pdf_url === 'string'
+          ? letter.provider_payload.pdf_url
+          : letter.export_url,
+      docx_url:
+        typeof letter.provider_payload?.docx_url === 'string'
+          ? letter.provider_payload.docx_url
+          : null,
       created_at: letter.created_at,
     };
   }
@@ -889,6 +984,243 @@ export class LegalService {
     });
 
     return artifact;
+  }
+
+  private async ensureDemandLetterArtifacts(
+    trigger: LegalTriggerRecord,
+    letter: DemandLetterRecord,
+  ) {
+    const existing = this.extractDemandLetterArtifacts(trigger.id, letter);
+    if (existing) {
+      return existing;
+    }
+
+    const artifacts = await this.writeDemandLetterArtifacts({
+      triggerId: trigger.id,
+      draftText: letter.draft_text,
+      sellerName: trigger.seller_name,
+      buyerName: trigger.buyer_name,
+    });
+
+    await this.supabaseService.update(
+      'demand_letters',
+      { id: letter.id },
+      {
+        export_url: artifacts.pdf.download_url,
+        provider_payload: {
+          ...(letter.provider_payload ?? {}),
+          pdf_url: artifacts.pdf.download_url,
+          pdf_storage_path: artifacts.pdf.storage_path,
+          docx_url: artifacts.docx.download_url,
+          docx_storage_path: artifacts.docx.storage_path,
+        },
+      },
+    );
+
+    await this.supabaseService.update(
+      'legal_triggers',
+      { id: trigger.id },
+      {
+        demand_letter_url: artifacts.pdf.download_url,
+      },
+    );
+
+    return artifacts;
+  }
+
+  private extractDemandLetterArtifacts(
+    triggerId: string,
+    letter: DemandLetterRecord,
+  ): DemandLetterArtifacts | null {
+    const pdfStoragePath = letter.provider_payload?.pdf_storage_path;
+    const docxStoragePath = letter.provider_payload?.docx_storage_path;
+    const pdfUrl = letter.provider_payload?.pdf_url;
+    const docxUrl = letter.provider_payload?.docx_url;
+
+    if (
+      typeof pdfStoragePath !== 'string' ||
+      typeof docxStoragePath !== 'string' ||
+      typeof pdfUrl !== 'string' ||
+      typeof docxUrl !== 'string'
+    ) {
+      return null;
+    }
+
+    const fileNameBase = `tradeguard-demand-letter-${triggerId}`;
+
+    return {
+      pdf: {
+        file_name: `${fileNameBase}.pdf`,
+        storage_path: pdfStoragePath,
+        download_url: pdfUrl,
+        content_type: 'application/pdf',
+        format: 'pdf',
+      },
+      docx: {
+        file_name: `${fileNameBase}.docx`,
+        storage_path: docxStoragePath,
+        download_url: docxUrl,
+        content_type:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        format: 'docx',
+      },
+    };
+  }
+
+  private async writeDemandLetterArtifacts(input: {
+    triggerId: string;
+    draftText: string;
+    sellerName: string;
+    buyerName: string;
+  }) {
+    const artifacts = this.buildDemandLetterArtifacts(input.triggerId);
+    await this.fileStorageService.ensureWritable();
+
+    const pdfBuffer = await this.renderDemandLetterPdf({
+      draftText: input.draftText,
+      sellerName: input.sellerName,
+      buyerName: input.buyerName,
+    });
+    const docxBuffer = await this.renderDemandLetterDocx({
+      draftText: input.draftText,
+      sellerName: input.sellerName,
+      buyerName: input.buyerName,
+    });
+
+    await this.fileStorageService.saveFile(artifacts.pdf.storage_path, pdfBuffer, {
+      contentType: artifacts.pdf.content_type,
+    });
+    await this.fileStorageService.saveFile(
+      artifacts.docx.storage_path,
+      docxBuffer,
+      {
+        contentType: artifacts.docx.content_type,
+      },
+    );
+
+    return artifacts;
+  }
+
+  private buildDemandLetterArtifacts(triggerId: string): DemandLetterArtifacts {
+    const fileNameBase = `tradeguard-demand-letter-${triggerId}`;
+    const downloadBase = `${this.getApiBaseUrl()}/v1/legal/triggers/${triggerId}/demand-letter/download`;
+
+    return {
+      pdf: {
+        file_name: `${fileNameBase}.pdf`,
+        storage_path: join('legal-letters', triggerId, `${fileNameBase}.pdf`),
+        download_url: `${downloadBase}?format=pdf`,
+        content_type: 'application/pdf',
+        format: 'pdf',
+      },
+      docx: {
+        file_name: `${fileNameBase}.docx`,
+        storage_path: join('legal-letters', triggerId, `${fileNameBase}.docx`),
+        download_url: `${downloadBase}?format=docx`,
+        content_type:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        format: 'docx',
+      },
+    };
+  }
+
+  private async renderDemandLetterDocx(input: {
+    draftText: string;
+    sellerName: string;
+    buyerName: string;
+  }) {
+    const sections = input.draftText
+      .split('\n\n')
+      .map((block) => block.trim())
+      .filter(Boolean);
+
+    const paragraphs: Paragraph[] = [
+      new Paragraph({
+        text: 'TradeGuard Demand Letter',
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 240 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Seller: ', bold: true }),
+          new TextRun(input.sellerName),
+        ],
+        spacing: { after: 120 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({ text: 'Buyer: ', bold: true }),
+          new TextRun(input.buyerName),
+        ],
+        spacing: { after: 240 },
+      }),
+      ...sections.map(
+        (block, index) =>
+          new Paragraph({
+            text: block,
+            spacing: { after: index === sections.length - 1 ? 0 : 220 },
+          }),
+      ),
+    ];
+
+    const document = new Document({
+      sections: [
+        {
+          properties: {},
+          children: paragraphs,
+        },
+      ],
+    });
+
+    return Buffer.from(await Packer.toBuffer(document));
+  }
+
+  private async renderDemandLetterPdf(input: {
+    draftText: string;
+    sellerName: string;
+    buyerName: string;
+  }) {
+    return await new Promise<Buffer>((resolve, reject) => {
+      const doc = new PDFDocument({
+        size: 'LETTER',
+        margin: 54,
+      });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      doc.fontSize(20).font('Helvetica-Bold').text('TradeGuard Demand Letter', {
+        align: 'center',
+      });
+      doc.moveDown();
+      doc.fontSize(11).font('Helvetica-Bold').text(`Seller: `, {
+        continued: true,
+      });
+      doc.font('Helvetica').text(input.sellerName);
+      doc.font('Helvetica-Bold').text(`Buyer: `, {
+        continued: true,
+      });
+      doc.font('Helvetica').text(input.buyerName);
+      doc.moveDown();
+
+      const sections = input.draftText
+        .split('\n\n')
+        .map((block) => block.trim())
+        .filter(Boolean);
+
+      for (const block of sections) {
+        doc.font('Helvetica').fontSize(11).text(block, {
+          align: 'left',
+          lineGap: 4,
+        });
+        doc.moveDown();
+      }
+
+      doc.end();
+    });
   }
 
   private buildBundleArtifact(triggerId: string): BundleArtifact {
