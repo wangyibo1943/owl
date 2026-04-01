@@ -57,4 +57,5 @@ Create environment files from:
 - [PRD](/Users/leo/owl/docs/tradeguard-prd.md)
 - [Sprint 1](/Users/leo/owl/docs/tradeguard-sprint-1.md)
 - [API Contract](/Users/leo/owl/docs/tradeguard-api-contract.md)
-
+- [Engineering Progress Manual](/Users/leo/owl/docs/engineering-progress-manual.md)
+- [Context Handoff Manual](/Users/leo/owl/docs/context-handoff-manual.md)
