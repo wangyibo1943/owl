@@ -883,17 +883,34 @@ export class CreditService {
 
   private scoreNameMatch(candidate: string, normalizedTarget: string) {
     const normalizedCandidate = this.normalizeCompanyName(candidate);
+    const normalizedCandidateAlias = this.normalizeAliasName(candidate);
+    const normalizedTargetAlias = this.normalizeAliasName(normalizedTarget);
 
     if (!normalizedCandidate) return 0;
     if (normalizedCandidate === normalizedTarget) return 100;
+    if (
+      normalizedCandidateAlias &&
+      normalizedTargetAlias &&
+      normalizedCandidateAlias === normalizedTargetAlias
+    ) {
+      return 98;
+    }
     if (normalizedCandidate.startsWith(normalizedTarget)) return 90;
     if (normalizedTarget.startsWith(normalizedCandidate)) return 85;
     if (normalizedCandidate.includes(normalizedTarget)) return 80;
     if (normalizedTarget.includes(normalizedCandidate)) return 75;
 
-    const targetTokens = new Set(normalizedTarget.split(' '));
-    const candidateTokens = normalizedCandidate.split(' ');
+    const targetTokens = this.tokenizeName(normalizedTarget);
+    const candidateTokens = [...this.tokenizeName(normalizedCandidate)];
     const overlap = candidateTokens.filter((token) => targetTokens.has(token));
+
+    if (targetTokens.size > 0 && overlap.length === targetTokens.size) {
+      return 92;
+    }
+
+    if (overlap.length >= 2) {
+      return 70 + overlap.length * 5;
+    }
 
     return overlap.length >= Math.max(1, targetTokens.size - 1)
       ? overlap.length * 10
@@ -1021,9 +1038,14 @@ export class CreditService {
   ) {
     const root = this.extractDomainRoot(hostname);
     const normalizedName = this.normalizeCompanyName(companyName);
-    const tokens = normalizedName.split(' ').filter((token) => token.length >= 3);
+    const aliasName = this.normalizeAliasName(companyName);
+    const tokens = [...this.tokenizeName(normalizedName)];
 
     if (ticker && root === ticker.trim().toLowerCase()) {
+      return true;
+    }
+
+    if (aliasName && root.includes(aliasName.toLowerCase())) {
       return true;
     }
 
@@ -1031,7 +1053,27 @@ export class CreditService {
       return false;
     }
 
-    return tokens.some((token) => root.includes(token.toLowerCase()));
+    const strongTokens = tokens.filter((token) => token.length >= 4);
+    if (strongTokens.some((token) => root.includes(token.toLowerCase()))) {
+      return true;
+    }
+
+    return tokens
+      .filter((token) => token.length >= 3)
+      .slice(0, 2)
+      .some((token) => root.includes(token.toLowerCase()));
+  }
+
+  private normalizeAliasName(value: string) {
+    return this.normalizeCompanyName(value).replace(/\s+/g, '');
+  }
+
+  private tokenizeName(value: string) {
+    return value
+      .split(' ')
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+      .reduce((set, token) => set.add(token), new Set<string>());
   }
 
   private extractDomainRoot(hostname: string) {
