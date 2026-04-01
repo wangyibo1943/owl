@@ -57,6 +57,11 @@ export class EvidenceController {
     return this.evidenceService.createAdobeSignNotarization(payload);
   }
 
+  @Post('providers/adobe-sign/sync-pending')
+  syncPendingAdobeSignNotarizations() {
+    return this.evidenceService.syncPendingAdobeSignNotarizations();
+  }
+
   @Post(':evidenceId/providers/adobe-sign/sync')
   syncAdobeSignNotarization(@Param('evidenceId') evidenceId: string) {
     return this.evidenceService.syncAdobeSignNotarization(evidenceId);

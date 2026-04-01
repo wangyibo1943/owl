@@ -87,4 +87,37 @@ export class SupabaseService {
 
     return data ?? null;
   }
+
+  async findMany<T extends Record<string, unknown>>(
+    table: string,
+    match: Record<string, unknown>,
+    options?: {
+      orderBy?: string;
+      ascending?: boolean;
+      limit?: number;
+    },
+  ) {
+    if (!this.client) return [];
+
+    let query = this.client.from(table).select('*').match(match);
+
+    if (options?.orderBy) {
+      query = query.order(options.orderBy, {
+        ascending: options.ascending ?? false,
+      });
+    }
+
+    if (options?.limit) {
+      query = query.limit(options.limit);
+    }
+
+    const { data, error } = await query.returns<T[]>();
+
+    if (error) {
+      this.logger.error(`Failed to query ${table}: ${error.message}`);
+      return [];
+    }
+
+    return data ?? [];
+  }
 }

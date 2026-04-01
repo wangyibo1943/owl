@@ -10,9 +10,14 @@ import { SupabaseService } from '../database/supabase.service';
 type NormalizedCompanyRecord = {
   name: string;
   registrationNumber: string | null;
+  ticker: string | null;
+  entityType: string | null;
   jurisdiction: string | null;
   status: string | null;
   incorporationDate: string | null;
+  lastFilingDate: string | null;
+  sicCode: string | null;
+  sicDescription: string | null;
   website: string | null;
   sourceName: 'California SOS' | 'SEC EDGAR';
   sourceUrl: string | null;
@@ -81,10 +86,15 @@ export class CreditService {
     const evaluation = this.evaluateRisk(company);
     const responsePayload = {
       company_name: company.name,
+      ticker: company.ticker,
+      entity_type: company.entityType,
       jurisdiction: company.jurisdiction,
       registration_number: company.registrationNumber,
       status: company.status ?? 'Unknown',
       incorporation_date: company.incorporationDate,
+      last_filing_date: company.lastFilingDate,
+      sic_code: company.sicCode,
+      sic_description: company.sicDescription,
       website: company.website,
       credit_grade: evaluation.creditGrade,
       risk_score: evaluation.riskScore,
@@ -236,6 +246,8 @@ export class CreditService {
     return {
       name: String(entity.EntityName ?? 'Unknown Entity'),
       registrationNumber: entity.EntityID ? String(entity.EntityID) : null,
+      ticker: null,
+      entityType: entity.EntityType ? String(entity.EntityType) : null,
       jurisdiction: entity.Jurisdiction
         ? `US-${String(entity.Jurisdiction).slice(0, 2).toUpperCase()}`
         : 'US-CA',
@@ -245,6 +257,9 @@ export class CreditService {
       incorporationDate: entity.FilingDate
         ? String(entity.FilingDate).slice(0, 10)
         : null,
+      lastFilingDate: entity.FilingDate ? String(entity.FilingDate).slice(0, 10) : null,
+      sicCode: null,
+      sicDescription: null,
       website: null,
       sourceName: 'California SOS',
       sourceUrl: entity.EntityID
@@ -370,6 +385,22 @@ export class CreditService {
             .trim()
             .toUpperCase()
         : null;
+    const lastFilingDate = this.extractLastFilingDate(bestCandidate.submissions);
+    const sic =
+      bestCandidate.submissions.sic &&
+      String(bestCandidate.submissions.sic).trim().length > 0
+        ? String(bestCandidate.submissions.sic).trim()
+        : null;
+    const sicDescription =
+      bestCandidate.submissions.sicDescription &&
+      String(bestCandidate.submissions.sicDescription).trim().length > 0
+        ? String(bestCandidate.submissions.sicDescription).trim()
+        : null;
+    const entityType =
+      bestCandidate.submissions.entityType &&
+      String(bestCandidate.submissions.entityType).trim().length > 0
+        ? String(bestCandidate.submissions.entityType).trim()
+        : 'SEC Reporting Entity';
 
     return {
       name: String(
@@ -378,9 +409,14 @@ export class CreditService {
           companyName,
       ),
       registrationNumber: `CIK ${bestCandidate.cik}`,
+      ticker: bestCandidate.company.ticker ? String(bestCandidate.company.ticker) : null,
+      entityType,
       jurisdiction: stateOfIncorporation ? `US-${stateOfIncorporation}` : 'US',
       status: 'SEC Reporting Entity',
       incorporationDate: null,
+      lastFilingDate,
+      sicCode: sic,
+      sicDescription,
       website: bestCandidate.secWebsite,
       sourceName: 'SEC EDGAR',
       sourceUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${bestCandidate.cik}`,
@@ -447,6 +483,16 @@ export class CreditService {
       riskFlags.push('MISSING_PUBLIC_WEBSITE');
     }
 
+    if (company.sourceName === 'SEC EDGAR' && !company.ticker) {
+      score -= 5;
+      riskFlags.push('MISSING_TICKER');
+    }
+
+    if (company.sourceName === 'SEC EDGAR' && !company.sicCode) {
+      score -= 5;
+      riskFlags.push('MISSING_INDUSTRY_CLASSIFICATION');
+    }
+
     if (
       company.sourceName === 'California SOS' &&
       !company.agentAddress1 &&
@@ -479,6 +525,21 @@ export class CreditService {
       riskFlags.push('MEDIUM_MATCH_CONFIDENCE');
     }
 
+    if (company.lastFilingDate) {
+      const filingDate = new Date(company.lastFilingDate);
+      const ageInDays =
+        (Date.now() - filingDate.getTime()) / (24 * 60 * 60 * 1000);
+      if (ageInDays > 540) {
+        score -= 20;
+        riskFlags.push('STALE_PUBLIC_FILINGS');
+      } else if (ageInDays > 365) {
+        score -= 10;
+        riskFlags.push('AGING_PUBLIC_FILINGS');
+      } else if (ageInDays <= 120) {
+        score += 5;
+      }
+    }
+
     score = Math.max(0, Math.min(100, score));
 
     const creditGrade = this.mapScoreToGrade(score);
@@ -505,12 +566,12 @@ export class CreditService {
     company: NormalizedCompanyRecord,
   ) {
     if (riskFlags.length === 0) {
-      return `${company.sourceName} data indicates a structurally stable entity with high registry confidence. Current grade is ${creditGrade}.`;
+      return `${company.sourceName} data indicates a structurally stable entity with high registry confidence. Current grade is ${creditGrade}. Latest filing visibility and registry signals look healthy.`;
     }
 
     return `Entity grade is ${creditGrade}. Registry review found the following risk flags: ${riskFlags.join(
       ', ',
-    )}. Current status is ${company.status ?? 'Unknown'}, and match confidence is ${company.matchConfidence.toLowerCase()}.`;
+    )}. Current status is ${company.status ?? 'Unknown'}, match confidence is ${company.matchConfidence.toLowerCase()}, and latest filing date is ${company.lastFilingDate ?? 'not available'}.`;
   }
 
   private describeProvider(companyState: string | null) {
@@ -610,6 +671,25 @@ export class CreditService {
     } catch {
       return null;
     }
+  }
+
+  private extractLastFilingDate(payload: Record<string, unknown>) {
+    const filings = payload.filings;
+
+    if (
+      filings &&
+      typeof filings === 'object' &&
+      'recent' in filings &&
+      filings.recent &&
+      typeof filings.recent === 'object' &&
+      'filingDate' in filings.recent &&
+      Array.isArray(filings.recent.filingDate) &&
+      filings.recent.filingDate.length > 0
+    ) {
+      return String(filings.recent.filingDate[0]).slice(0, 10);
+    }
+
+    return null;
   }
 
   private async logLookup(payload: Record<string, unknown>) {

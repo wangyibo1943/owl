@@ -187,13 +187,20 @@ export class EvidenceService {
       };
     }
 
+    const refreshedCertificate = await this.maybeRefreshAdobeCertificateStatus(
+      evidenceId,
+      certificate,
+    );
+
     return {
       success: true,
       data: {
         evidence_id: evidenceId,
-        certificate_id: certificate.provider_certificate_id ?? certificate.id,
-        certificate_url: certificate.certificate_url,
-        status: certificate.status,
+        certificate_id:
+          refreshedCertificate.provider_certificate_id ??
+          refreshedCertificate.id,
+        certificate_url: refreshedCertificate.certificate_url,
+        status: refreshedCertificate.status,
       },
     };
   }
@@ -286,6 +293,41 @@ export class EvidenceService {
     });
   }
 
+  async syncPendingAdobeSignNotarizations() {
+    const certificates =
+      await this.supabaseService.findMany<NotarizationCertificateRecord>(
+        'notarization_certificates',
+        {
+          status: 'IN_PROGRESS',
+        },
+        {
+          orderBy: 'created_at',
+          ascending: false,
+          limit: 20,
+        },
+      );
+
+    const adobeCertificates = certificates.filter((certificate) =>
+      certificate.provider_name.toLowerCase().includes('adobe'),
+    );
+
+    const results = await Promise.allSettled(
+      adobeCertificates.map((certificate) =>
+        this.syncAdobeSignNotarization(certificate.evidence_id),
+      ),
+    );
+
+    return {
+      success: true,
+      data: {
+        scanned: certificates.length,
+        attempted: adobeCertificates.length,
+        synced: results.filter((result) => result.status === 'fulfilled').length,
+        failed: results.filter((result) => result.status === 'rejected').length,
+      },
+    };
+  }
+
   async downloadCertificate(evidenceId: string): Promise<CertificateDownloadResult> {
     const evidence = await this.supabaseService.findFirst<EvidenceRecord>(
       'evidence_records',
@@ -322,11 +364,16 @@ export class EvidenceService {
       });
     }
 
-    if (certificate.provider_name.toLowerCase().includes('adobe')) {
+    const refreshedCertificate = await this.maybeRefreshAdobeCertificateStatus(
+      evidenceId,
+      certificate,
+    );
+
+    if (refreshedCertificate.provider_name.toLowerCase().includes('adobe')) {
       const agreementId =
-        certificate.provider_certificate_id ||
-        (typeof certificate.provider_payload?.agreement_id === 'string'
-          ? certificate.provider_payload.agreement_id
+        refreshedCertificate.provider_certificate_id ||
+        (typeof refreshedCertificate.provider_payload?.agreement_id === 'string'
+          ? refreshedCertificate.provider_payload.agreement_id
           : null);
 
       if (!agreementId) {
@@ -346,13 +393,13 @@ export class EvidenceService {
         content_type: document.contentType,
         file_name: this.buildAdobeCertificateFileName({
           evidence,
-          certificate,
+          certificate: refreshedCertificate,
           agreementId,
         }),
       };
     }
 
-    const response = await fetch(certificate.certificate_url);
+    const response = await fetch(refreshedCertificate.certificate_url!);
 
     if (!response.ok) {
       throw new NotFoundException({
@@ -368,9 +415,9 @@ export class EvidenceService {
     const content = Buffer.from(await response.arrayBuffer());
     const fileName = this.buildCertificateFileName({
       evidence,
-      certificate,
+      certificate: refreshedCertificate,
       contentType,
-      certificateUrl: certificate.certificate_url,
+      certificateUrl: refreshedCertificate.certificate_url!,
     });
 
     return {
@@ -706,5 +753,39 @@ export class EvidenceService {
       workflow_name: 'TradeGuard_Evidence_Notarization',
       ...payload,
     });
+  }
+
+  private async maybeRefreshAdobeCertificateStatus(
+    evidenceId: string,
+    certificate: NotarizationCertificateRecord,
+  ) {
+    if (!certificate.provider_name.toLowerCase().includes('adobe')) {
+      return certificate;
+    }
+
+    if (['COMPLETED', 'FAILED'].includes(certificate.status)) {
+      return certificate;
+    }
+
+    try {
+      await this.syncAdobeSignNotarization(evidenceId);
+      return (
+        (await this.supabaseService.findFirst<NotarizationCertificateRecord>(
+          'notarization_certificates',
+          { evidence_id: evidenceId },
+          {
+            orderBy: 'created_at',
+            ascending: false,
+          },
+        )) ?? certificate
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Adobe Sign status refresh skipped for ${evidenceId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
+      return certificate;
+    }
   }
 }
