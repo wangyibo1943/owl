@@ -30,22 +30,25 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Flutter mobile skeleton is created
 - Backend dependencies are installed
 - Backend build passes locally
+- OpenCorporates credit lookup structure is implemented
+- Supabase lookup persistence infrastructure is implemented
+- Evidence upload persistence and n8n trigger structure are implemented
+- Certificate status route can read stored records from Supabase
 
 ### Partially Completed
 
-- Credit lookup API route exists, but still returns placeholder data
-- Evidence upload API route exists, but is not connected to storage or n8n
-- Certificate query route exists, but returns placeholder data
+- Credit lookup API route is wired to OpenCorporates and first-pass grading rules
+- Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
+- Certificate query route reads Supabase state, but still depends on external workflow/provider completion
 - Flutter app screens exist as a manual skeleton, not a generated Flutter project
 
 ### Not Started
 
 - Real OpenCorporates integration
-- Real risk scoring engine
+- Full production-grade risk scoring engine
 - Real file upload storage
 - Real notarization provider integration
 - Real notification delivery
-- Supabase database integration in backend
 - Authentication
 - Payment logic
 
@@ -66,6 +69,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - [credit.service.ts](/Users/leo/owl/apps/backend/src/modules/credit/credit.service.ts)
 - [evidence.controller.ts](/Users/leo/owl/apps/backend/src/modules/evidence/evidence.controller.ts)
 - [evidence.service.ts](/Users/leo/owl/apps/backend/src/modules/evidence/evidence.service.ts)
+- [supabase.service.ts](/Users/leo/owl/apps/backend/src/modules/database/supabase.service.ts)
 
 ### Mobile
 
@@ -87,12 +91,16 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - `apps/backend` dependency install completed
 - `apps/backend` Nest build completed
 - repo structure is consistent
+- credit lookup provider structure is implemented
+- company lookup logging can write to Supabase when credentials are present
+- evidence metadata can write to Supabase and trigger n8n webhook when configured
+- certificate route can return stored status instead of placeholder data
 
 ### Verified Not Yet Working
 
 - Flutter CLI is not installed on this machine
 - mobile app has not been compiled
-- backend is not connected to real external services
+- backend requires real external credentials before full runtime use
 - workflows are drafts and have not been imported into n8n
 
 ## Build and Run Notes
@@ -152,21 +160,21 @@ Action:
 
 Impact:
 
-- Demo flow exists, but business output is not trustworthy yet.
+- A first-pass real integration exists, but the score model is still lightweight and should not be treated as a production-grade decision engine.
 
 Action:
 
 - Replace mock scoring in [credit.service.ts](/Users/leo/owl/apps/backend/src/modules/credit/credit.service.ts)
 
-### Risk 3: Evidence Upload Is API-Only, Not Storage-Backed
+### Risk 3: Evidence Upload Is Metadata-Backed, Not File-Storage-Backed
 
 Impact:
 
-- No real persistence or upload lifecycle yet.
+- Metadata persists, but raw files are not yet stored in object storage.
 
 Action:
 
-- Add object storage and metadata persistence before provider integration
+- Add object storage before production notarization traffic
 
 ### Risk 4: n8n Workflows Are Drafts, Not Production-Ready
 
@@ -181,12 +189,11 @@ Action:
 ## Recommended Next Build Order
 
 1. Connect backend credit lookup to OpenCorporates
-2. Implement deterministic credit grading rules
-3. Add Supabase integration for lookup logs and evidence records
-4. Add file upload storage and hash persistence
-5. Connect n8n notarization workflow
-6. Connect certificate result polling
-7. Generate and wire full Flutter project
+2. Strengthen deterministic credit grading rules
+3. Add file storage path for evidence binaries
+4. Connect n8n workflow to real provider and certificate persistence
+5. Add certificate result polling or webhook callback completion
+6. Generate and wire full Flutter project
 
 ## Definition of “Ready for Demo”
 
@@ -226,4 +233,6 @@ The repo can be considered demo-ready when all of the following are true:
 
 - Repository rebuilt as TradeGuard MVP
 - docs, backend skeleton, mobile skeleton, Supabase schema, and n8n drafts added
-
+- credit lookup connected to OpenCorporates request flow
+- lookup logging infrastructure added for Supabase
+- evidence upload connected to Supabase metadata persistence and n8n trigger path

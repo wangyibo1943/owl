@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateEvidenceDto {
   @IsString()
@@ -17,7 +17,7 @@ export class CreateEvidenceDto {
   @IsNotEmpty()
   file_content_base64!: string;
 
+  @IsOptional()
   @IsString()
   deal_reference!: string;
 }
-

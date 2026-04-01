@@ -65,11 +65,22 @@ Not Found:
 
 ### `POST /evidence/upload`
 
-Multipart fields:
+Current MVP request body:
 
-- `file`
-- `company_name`
-- `deal_reference`
+```json
+{
+  "company_name": "Apple Inc.",
+  "deal_reference": "PO-2026-001",
+  "filename": "contract.pdf",
+  "mime_type": "application/pdf",
+  "file_content_base64": "JVBERi0xLjQK..."
+}
+```
+
+Note:
+
+- current implementation uses JSON + base64 for speed of integration
+- multipart upload can be introduced in the next iteration when object storage is added
 
 Success:
 
@@ -80,7 +91,8 @@ Success:
     "evidence_id": "evd_123",
     "filename": "contract.pdf",
     "file_hash": "sha256:abc123",
-    "status": "PENDING_NOTARIZATION"
+    "status": "PENDING_NOTARIZATION",
+    "workflow_triggered": true
   }
 }
 ```
@@ -111,4 +123,4 @@ Success:
 - `PROVIDER_TIMEOUT`
 - `PROVIDER_ERROR`
 - `VALIDATION_ERROR`
-
+- `EVIDENCE_NOT_FOUND`
