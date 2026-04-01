@@ -63,6 +63,8 @@ Create environment files from:
 - `GET /v1/evidence/:evidenceId/certificate` now returns stored certificate state when available
 - `POST /v1/evidence/:evidenceId/anchor` now creates a first-pass blockchain anchor record after certificate completion
 - `GET /v1/evidence/:evidenceId/anchor` now returns stored anchor state when available
+- `POST /v1/legal/trigger` now creates a first-pass legal intake record after evidence notarization and anchoring
+- `GET /v1/legal/triggers/:triggerId` now returns stored legal trigger state when available
 
 ## Key Docs
 

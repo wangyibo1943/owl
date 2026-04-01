@@ -5,6 +5,7 @@ import { CreditModule } from './modules/credit/credit.module';
 import { EvidenceModule } from './modules/evidence/evidence.module';
 import { DatabaseModule } from './modules/database/database.module';
 import { AnchorModule } from './modules/anchor/anchor.module';
+import { LegalModule } from './modules/legal/legal.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AnchorModule } from './modules/anchor/anchor.module';
     CreditModule,
     EvidenceModule,
     AnchorModule,
+    LegalModule,
   ],
 })
 export class AppModule {}

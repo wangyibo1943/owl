@@ -213,6 +213,94 @@ Success:
 }
 ```
 
+## 7. Legal Trigger
+
+### `POST /legal/trigger`
+
+Request:
+
+```json
+{
+  "evidence_id": "evd_123",
+  "seller_name": "Shenzhen Acme Trading Co., Ltd.",
+  "seller_email": "ops@acme.cn",
+  "buyer_name": "Buyer LLC",
+  "buyer_email": "ap@buyer.com",
+  "amount_in_dispute": 24500,
+  "currency": "USD",
+  "breach_summary": "Buyer accepted delivery but has not paid the final invoice for 45 days.",
+  "lawyer_contact": "intake@usfirm.com"
+}
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "legal_trigger_id": "ltr_789",
+    "evidence_id": "evd_123",
+    "anchor_id": "anc_456",
+    "seller_name": "Shenzhen Acme Trading Co., Ltd.",
+    "seller_email": "ops@acme.cn",
+    "buyer_name": "Buyer LLC",
+    "buyer_email": "ap@buyer.com",
+    "amount_in_dispute": 24500,
+    "currency": "USD",
+    "breach_summary": "Buyer accepted delivery but has not paid the final invoice for 45 days.",
+    "trigger_status": "INTAKE_COMPLETED",
+    "demand_letter_status": "PENDING",
+    "bundle_status": "PENDING",
+    "handoff_status": "NOT_STARTED",
+    "demand_letter_url": null,
+    "bundle_url": null,
+    "lawyer_contact": "intake@usfirm.com",
+    "created_at": "2026-04-01T20:30:00Z"
+  }
+}
+```
+
+Validation Error:
+
+```json
+{
+  "success": false,
+  "error_code": "ANCHOR_NOT_READY",
+  "message": "Evidence must be anchored on-chain before legal trigger creation"
+}
+```
+
+### `GET /legal/triggers/:triggerId`
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "legal_trigger_id": "ltr_789",
+    "evidence_id": "evd_123",
+    "anchor_id": "anc_456",
+    "seller_name": "Shenzhen Acme Trading Co., Ltd.",
+    "seller_email": "ops@acme.cn",
+    "buyer_name": "Buyer LLC",
+    "buyer_email": "ap@buyer.com",
+    "amount_in_dispute": 24500,
+    "currency": "USD",
+    "breach_summary": "Buyer accepted delivery but has not paid the final invoice for 45 days.",
+    "trigger_status": "INTAKE_COMPLETED",
+    "demand_letter_status": "PENDING",
+    "bundle_status": "PENDING",
+    "handoff_status": "NOT_STARTED",
+    "demand_letter_url": null,
+    "bundle_url": null,
+    "lawyer_contact": "intake@usfirm.com",
+    "created_at": "2026-04-01T20:30:00Z"
+  }
+}
+```
+
 ## Error Codes
 
 - `COMPANY_NOT_FOUND`
@@ -226,3 +314,6 @@ Success:
 - `CERTIFICATE_NOT_READY`
 - `ANCHOR_NOT_FOUND`
 - `ANCHOR_PERSIST_FAILED`
+- `ANCHOR_NOT_READY`
+- `LEGAL_TRIGGER_NOT_FOUND`
+- `LEGAL_TRIGGER_CREATE_FAILED`

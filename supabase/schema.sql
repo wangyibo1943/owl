@@ -51,6 +51,28 @@ create table if not exists public.blockchain_anchors (
     created_at timestamptz not null default now()
 );
 
+create table if not exists public.legal_triggers (
+    id uuid primary key default gen_random_uuid(),
+    evidence_id uuid not null references public.evidence_records(id) on delete cascade,
+    anchor_id uuid references public.blockchain_anchors(id) on delete set null,
+    seller_name text not null,
+    seller_email text,
+    buyer_name text not null,
+    buyer_email text,
+    amount_in_dispute numeric(14,2),
+    currency text,
+    breach_summary text not null,
+    trigger_status text not null default 'INTAKE_COMPLETED',
+    demand_letter_status text not null default 'PENDING',
+    bundle_status text not null default 'PENDING',
+    handoff_status text not null default 'NOT_STARTED',
+    demand_letter_url text,
+    bundle_url text,
+    lawyer_contact text,
+    provider_payload jsonb,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists public.workflow_logs (
     id uuid primary key default gen_random_uuid(),
     workflow_name text not null,
@@ -71,3 +93,6 @@ create index if not exists idx_notarization_certificates_evidence_id
 
 create unique index if not exists idx_blockchain_anchors_evidence_id
     on public.blockchain_anchors(evidence_id);
+
+create unique index if not exists idx_legal_triggers_evidence_id
+    on public.legal_triggers(evidence_id);
