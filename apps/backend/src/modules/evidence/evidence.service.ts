@@ -549,6 +549,60 @@ export class EvidenceService {
     triggered: boolean;
     status: string;
   }> {
+    if (this.adobeSignService.isConfigured()) {
+      try {
+        const adobeResponse = await this.createAdobeSignNotarization({
+          evidence_id: String(payload.evidence_id),
+          filename: String(payload.filename),
+          mime_type: String(payload.mime_type),
+          file_content_base64: String(payload.file_content_base64),
+          file_hash: String(payload.file_hash),
+        });
+
+        await this.recordNotarizationResult(String(payload.evidence_id), {
+          provider_name: adobeResponse.provider_name,
+          provider_certificate_id: adobeResponse.provider_certificate_id,
+          certificate_url: adobeResponse.certificate_url,
+          status: adobeResponse.status,
+          provider_payload: adobeResponse.provider_payload,
+        });
+
+        await this.logWorkflow({
+          reference_id: String(payload.evidence_id),
+          status: 'DIRECT_PROVIDER_TRIGGERED',
+          payload: adobeResponse,
+        });
+
+        return {
+          triggered: true,
+          status: adobeResponse.status,
+        };
+      } catch (error) {
+        this.logger.error(
+          `Failed to trigger direct Adobe Sign notarization: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
+        );
+        await this.supabaseService.update(
+          'evidence_records',
+          { id: payload.evidence_id },
+          { status: 'NOTARIZATION_TRIGGER_FAILED' },
+        );
+        await this.logWorkflow({
+          reference_id: String(payload.evidence_id),
+          status: 'DIRECT_PROVIDER_EXCEPTION',
+          payload: {
+            message: error instanceof Error ? error.message : 'unknown error',
+          },
+        });
+
+        return {
+          triggered: false,
+          status: 'NOTARIZATION_TRIGGER_FAILED',
+        };
+      }
+    }
+
     const explicitWebhookUrl = process.env.N8N_EVIDENCE_WEBHOOK_URL?.trim();
     const webhookBaseUrl = process.env.N8N_WEBHOOK_BASE_URL?.trim();
 
