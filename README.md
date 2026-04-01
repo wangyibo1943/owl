@@ -81,5 +81,8 @@ Create environment files from:
 - [Context Handoff Manual](/Users/leo/owl/docs/context-handoff-manual.md)
 - [Litigation Trigger Module](/Users/leo/owl/docs/litigation-trigger-module.md)
 - [Acceptance Checklist](/Users/leo/owl/docs/acceptance-checklist.md)
+- [Low-Fidelity Prototype](/Users/leo/owl/docs/low-fidelity-prototype.md)
+- [High-Fidelity UI Spec](/Users/leo/owl/docs/high-fidelity-ui-spec.md)
+- [Test Cases](/Users/leo/owl/docs/test-cases.md)
 - [Document Delivery Audit](/Users/leo/owl/docs/document-delivery-audit.md)
 - [Work Record](/Users/leo/owl/docs/work-record.md)
