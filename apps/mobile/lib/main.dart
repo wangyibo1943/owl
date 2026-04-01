@@ -208,6 +208,15 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
             ),
           ),
         ),
+        if (!_isLoading && _result == null && _error == null) ...[
+          const SizedBox(height: 16),
+          const _EmptyStateCard(
+            title: 'Ready to verify a buyer',
+            body:
+                'Enter a US company name and optional website to get a live risk grade, registry match confidence, and evidence-backed explanation.',
+            icon: Icons.domain_verification_outlined,
+          ),
+        ],
         if (_result != null) ...[
           const SizedBox(height: 16),
           _CreditResultCard(result: _result!),
@@ -427,6 +436,10 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                         : _selectedFile!.filename,
                   ),
                 ),
+                if (_selectedFile != null) ...[
+                  const SizedBox(height: 8),
+                  _SelectedFileCard(file: _selectedFile!),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _contentController,
@@ -462,6 +475,15 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
             ),
           ),
         ),
+        if (!_isSubmitting && _submission == null && _error == null) ...[
+          const SizedBox(height: 16),
+          const _EmptyStateCard(
+            title: 'Preserve contract evidence',
+            body:
+                'Upload a PDF, screenshot, or chat export to push it into the live notarization flow and keep a downloadable certificate trail.',
+            icon: Icons.verified_user_outlined,
+          ),
+        ],
         if (_submission != null) ...[
           const SizedBox(height: 16),
           _EvidenceResultCard(
@@ -557,14 +579,23 @@ class _CreditResultCard extends StatelessWidget {
                   value: result.matchConfidence,
                 ),
                 _MetricChip(label: 'Source', value: result.sourceName),
+                _MetricChip(label: 'Website', value: result.websiteMatchLabel),
                 if (result.ticker != null)
                   _MetricChip(label: 'Ticker', value: result.ticker!),
               ],
             ),
             const SizedBox(height: 16),
+            _StatusBanner(
+              tone: result.riskTone,
+              title: result.riskToneTitle,
+              body: result.summary,
+            ),
+            const SizedBox(height: 16),
             _DetailRow(label: 'Status', value: result.status),
             _DetailRow(
-                label: 'Jurisdiction', value: result.jurisdiction ?? 'N/A'),
+              label: 'Jurisdiction',
+              value: result.jurisdiction ?? 'N/A',
+            ),
             _DetailRow(
               label: 'Registration',
               value: result.registrationNumber ?? 'N/A',
@@ -581,10 +612,9 @@ class _CreditResultCard extends StatelessWidget {
               label: 'Industry',
               value: result.sicDescription ?? 'N/A',
             ),
-            const SizedBox(height: 16),
-            Text(
-              result.summary,
-              style: const TextStyle(height: 1.45),
+            _DetailRow(
+              label: 'Website Match',
+              value: result.websiteMatchLabel,
             ),
             if (result.riskFlags.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -641,7 +671,16 @@ class _EvidenceResultCard extends StatelessWidget {
             _DetailRow(label: 'Evidence ID', value: submission.evidenceId),
             _DetailRow(label: 'Hash', value: submission.fileHash),
             _DetailRow(label: 'Upload Status', value: submission.status),
+            const SizedBox(height: 8),
+            _StatusBanner(
+              tone: certificate?.statusTone ??
+                  _statusToneForValue(submission.status),
+              title: certificate?.statusTitle ?? 'Evidence received',
+              body: certificate?.statusSummary ??
+                  'The evidence file is stored and ready for notarization updates.',
+            ),
             if (certificate != null) ...[
+              const SizedBox(height: 16),
               _DetailRow(
                 label: 'Certificate Status',
                 value: certificate!.status,
@@ -691,6 +730,144 @@ class _EvidenceResultCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _EmptyStateCard extends StatelessWidget {
+  const _EmptyStateCard({
+    required this.title,
+    required this.body,
+    required this.icon,
+  });
+
+  final String title;
+  final String body;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          children: [
+            Icon(icon, size: 34, color: const Color(0xFF0F766E)),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              body,
+              style: const TextStyle(
+                color: Color(0xFF4B5563),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedFileCard extends StatelessWidget {
+  const _SelectedFileCard({required this.file});
+
+  final LocalEvidenceFile file;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F3F0),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Selected file',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF4B5563),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            file.filename,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${_formatBytes(file.bytes.length)} • ${file.mimeType}',
+            style: const TextStyle(color: Color(0xFF4B5563)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({
+    required this.tone,
+    required this.title,
+    required this.body,
+  });
+
+  final StatusTone tone;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tone.background,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: tone.foreground,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: TextStyle(
+              color: tone.foreground.withValues(alpha: 0.9),
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StatusTone {
+  const StatusTone({
+    required this.background,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color foreground;
 }
 
 class _GradeBadge extends StatelessWidget {
@@ -913,6 +1090,7 @@ class CreditLookupResult {
     required this.sourceName,
     required this.status,
     required this.summary,
+    required this.websiteMatch,
     this.ticker,
     this.entityType,
     this.jurisdiction,
@@ -933,6 +1111,7 @@ class CreditLookupResult {
   final String sourceName;
   final String status;
   final String summary;
+  final String websiteMatch;
   final String? lastFilingDate;
   final String? sicDescription;
 
@@ -952,10 +1131,51 @@ class CreditLookupResult {
       sourceName: json['source_name'] as String? ?? 'Unknown',
       status: json['status'] as String? ?? 'Unknown',
       summary: json['summary'] as String? ?? '',
+      websiteMatch: json['website_match'] as String? ?? 'UNKNOWN',
       lastFilingDate: json['last_filing_date'] as String?,
       sicDescription: json['sic_description'] as String?,
     );
   }
+
+  String get websiteMatchLabel => switch (websiteMatch) {
+        'VERIFIED' => 'Verified',
+        'PROBABLE' => 'Probable',
+        'MISMATCH' => 'Mismatch',
+        _ => 'Unknown',
+      };
+
+  StatusTone get riskTone {
+    if (creditGrade == 'A') {
+      return const StatusTone(
+        background: Color(0xFFE6F6EC),
+        foreground: Color(0xFF14532D),
+      );
+    }
+    if (creditGrade == 'B') {
+      return const StatusTone(
+        background: Color(0xFFE8F3F0),
+        foreground: Color(0xFF0F766E),
+      );
+    }
+    if (creditGrade == 'C') {
+      return const StatusTone(
+        background: Color(0xFFFFF4DB),
+        foreground: Color(0xFFB45309),
+      );
+    }
+
+    return const StatusTone(
+      background: Color(0xFFFDEAEA),
+      foreground: Color(0xFF991B1B),
+    );
+  }
+
+  String get riskToneTitle => switch (creditGrade) {
+        'A' => 'Low structural risk',
+        'B' => 'Moderate review recommended',
+        'C' => 'Elevated commercial risk',
+        _ => 'High risk warning',
+      };
 }
 
 class EvidenceSubmissionResult {
@@ -999,6 +1219,26 @@ class CertificateStatusResult {
       certificateUrl: json['certificate_url'] as String?,
     );
   }
+
+  StatusTone get statusTone => _statusToneForValue(status);
+
+  String get statusTitle => switch (status.toUpperCase()) {
+        'COMPLETED' => 'Certificate ready',
+        'FAILED' => 'Provider follow-up needed',
+        'IN_PROGRESS' => 'Notarization in progress',
+        _ => 'Evidence processing',
+      };
+
+  String get statusSummary => switch (status.toUpperCase()) {
+        'COMPLETED' =>
+          'The provider certificate is available and can be opened or downloaded now.',
+        'FAILED' =>
+          'The provider reported a failure state. Refresh again after checking Adobe Sign.',
+        'IN_PROGRESS' =>
+          'The evidence is in the live notarization queue. Refresh to check for certificate completion.',
+        _ =>
+          'The evidence has been accepted and is waiting for provider status updates.',
+      };
 }
 
 class LocalEvidenceFile {
@@ -1029,4 +1269,40 @@ String _mimeTypeFromFilename(String filename) {
   if (lower.endsWith('.txt')) return 'text/plain';
 
   return 'application/octet-stream';
+}
+
+StatusTone _statusToneForValue(String value) {
+  final normalized = value.trim().toUpperCase();
+
+  switch (normalized) {
+    case 'COMPLETED':
+      return const StatusTone(
+        background: Color(0xFFE6F6EC),
+        foreground: Color(0xFF14532D),
+      );
+    case 'FAILED':
+      return const StatusTone(
+        background: Color(0xFFFDEAEA),
+        foreground: Color(0xFF991B1B),
+      );
+    case 'IN_PROGRESS':
+    case 'PENDING_NOTARIZATION':
+      return const StatusTone(
+        background: Color(0xFFFFF4DB),
+        foreground: Color(0xFFB45309),
+      );
+    default:
+      return const StatusTone(
+        background: Color(0xFFE8F3F0),
+        foreground: Color(0xFF0F766E),
+      );
+  }
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
