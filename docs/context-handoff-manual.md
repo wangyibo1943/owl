@@ -7,7 +7,7 @@ If someone joins the project today, this document should give them enough contex
 
 ## Project Summary
 
-TradeGuard is a B2B pre-trade risk and evidence preservation tool for China-based cross-border sellers.
+TradeGuard is a B2B pre-trade risk, evidence preservation, and dispute activation tool for China-based cross-border sellers.
 
 The first MVP is intentionally narrow:
 
@@ -15,6 +15,7 @@ The first MVP is intentionally narrow:
 2. Show a simple credit result
 3. Let user upload a contract or chat record
 4. Return a notarization certificate
+5. Prepare a US legal trigger package
 
 Tariff risk is intentionally deferred to Phase 2.
 
@@ -29,6 +30,7 @@ TradeGuard combines those two moments into one workflow:
 
 - risk check before deal
 - evidence preservation before dispute
+- legal activation when dispute becomes real
 
 ## What the Founder Wants
 
@@ -39,6 +41,8 @@ The founder wants one chain to work:
 2. get risk result
 3. upload contract
 4. receive certificate
+5. anchor evidence
+6. generate legal package
 
 This is the primary success metric for engineering at the current stage.
 
@@ -50,6 +54,7 @@ This is the primary success metric for engineering at the current stage.
 - evidence upload
 - notarization
 - notification
+- legal trigger design
 
 ### Explicitly Out of Phase 1
 
@@ -58,6 +63,7 @@ This is the primary success metric for engineering at the current stage.
 - advanced AI credit decisions
 - team workflows
 - CRM
+- direct court filing automation
 
 ## Tech Stack Decision
 
@@ -107,6 +113,7 @@ Why:
 - [tradeguard-api-contract.md](/Users/leo/owl/docs/tradeguard-api-contract.md)
 - [engineering-progress-manual.md](/Users/leo/owl/docs/engineering-progress-manual.md)
 - [context-handoff-manual.md](/Users/leo/owl/docs/context-handoff-manual.md)
+- [litigation-trigger-module.md](/Users/leo/owl/docs/litigation-trigger-module.md)
 
 ### Backend Skeleton
 
@@ -128,6 +135,7 @@ Why:
 - credit lookup workflow
 - evidence notarization workflow
 - notification workflow
+- litigation trigger module design
 
 ### Database Draft
 
@@ -144,6 +152,8 @@ Why:
 - provider API integration
 - complete Flutter app structure
 - CI/CD
+- blockchain anchoring implementation
+- legal trigger implementation
 
 ## Important Product Decisions Already Made
 
@@ -174,6 +184,15 @@ Reason:
 - too much scope for first shipping chain
 - separate data model and compliance complexity
 
+### Decision 4
+
+Evidence preservation is not the end-state product.
+
+Reason:
+
+- preserved evidence alone does not help users start action fast enough
+- the product should bridge preserved evidence into a US legal workflow
+
 ## API Intent
 
 The intended core API surface is:
@@ -182,6 +201,11 @@ The intended core API surface is:
 - `POST /v1/credit/lookup`
 - `POST /v1/evidence/upload`
 - `GET /v1/evidence/:evidenceId/certificate`
+
+Near-term additions:
+
+- `POST /v1/evidence/:evidenceId/anchor`
+- `POST /v1/legal/trigger`
 
 Reference:
 
@@ -214,6 +238,12 @@ Store:
 - certificate url
 - provider payload
 
+### Future tables
+
+- `blockchain_anchors`
+- `legal_triggers`
+- `demand_letters`
+
 ## How a New Engineer Should Start
 
 1. Read [tradeguard-prd.md](/Users/leo/owl/docs/tradeguard-prd.md)
@@ -224,6 +254,7 @@ Store:
 6. Set up Supabase
 7. Import n8n workflows
 8. Then generate the Flutter app structure
+9. Then extend the evidence flow into blockchain anchor and legal trigger actions
 
 ## Required External Inputs Before Real Integration
 
@@ -237,6 +268,8 @@ The following values will be needed before the repo becomes fully functional:
 - TradeGuard API base URL for n8n callback
 - notarization provider API endpoint
 - notification email sender setup
+- blockchain anchor service
+- legal package generation path
 
 ## Known Limitations
 
@@ -251,6 +284,10 @@ The backend flow is real in structure, but still depends on live credentials and
 ### Limitation 3
 
 The workflows are design drafts and still need import plus credential wiring.
+
+### Limitation 4
+
+The litigation trigger path is product-defined, but not yet implemented in backend routes or workflows.
 
 ## Current Handoff Message
 

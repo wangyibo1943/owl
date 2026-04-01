@@ -1,6 +1,6 @@
 # TradeGuard
 
-TradeGuard is a B2B risk and compliance tool for cross-border sellers.
+TradeGuard is a B2B risk, evidence, and dispute activation tool for cross-border sellers.
 
 Phase 1 MVP focuses on one end-to-end flow:
 
@@ -8,11 +8,13 @@ Phase 1 MVP focuses on one end-to-end flow:
 2. Return a credit grade and risk flags
 3. Upload a contract or chat transcript
 4. Generate evidence hash and notarization record
+5. Prepare a legal trigger package
 
 ## Product Scope
 
 - Credit lookup
 - Evidence notarization
+- Blockchain anchor and legal trigger design
 - Notification workflow
 
 Tariff risk is documented for Phase 2 and not included in the first engineering sprint.
@@ -67,3 +69,4 @@ Create environment files from:
 - [API Contract](/Users/leo/owl/docs/tradeguard-api-contract.md)
 - [Engineering Progress Manual](/Users/leo/owl/docs/engineering-progress-manual.md)
 - [Context Handoff Manual](/Users/leo/owl/docs/context-handoff-manual.md)
+- [Litigation Trigger Module](/Users/leo/owl/docs/litigation-trigger-module.md)

@@ -10,7 +10,7 @@
 
 ## Product Positioning
 
-TradeGuard helps cross-border B2B sellers identify buyer risk and preserve transaction evidence before disputes happen.
+TradeGuard helps cross-border B2B sellers identify buyer risk, preserve transaction evidence, and prepare a case for US legal escalation.
 
 ## Target Users
 
@@ -26,6 +26,7 @@ Validate that users will complete a pre-trade risk flow:
 2. Review credit result
 3. Upload contract or chat evidence
 4. Receive notarization certificate
+5. Start a US legal trigger package
 
 ## In Scope
 
@@ -35,7 +36,9 @@ Validate that users will complete a pre-trade risk flow:
 - Contract or chat file upload
 - Evidence hash generation
 - Notarization API workflow
+- Blockchain anchor after notarization
 - Certificate result page
+- Demand letter and legal handoff preparation
 - Email notification after completion
 
 ## Out of Scope
@@ -61,6 +64,10 @@ As a seller, I want to upload contracts or chat history and receive a notarizati
 
 As a seller, I want to receive notification after notarization finishes so I know when the certificate is ready.
 
+### US-004 Litigation Trigger
+
+As a seller, after evidence is preserved, I want one action that prepares a US legal package so I can move quickly into demand-letter or lawyer handoff workflows.
+
 ## Core Workflow
 
 1. User opens home page
@@ -70,7 +77,9 @@ As a seller, I want to receive notification after notarization finishes so I kno
 5. User uploads a contract or chat file
 6. System hashes the file and triggers notarization workflow
 7. System stores certificate record
-8. User sees certificate result and receives email
+8. System anchors the evidence digest on-chain
+9. User sees certificate result and can start the legal trigger flow
+10. User receives email and can export a legal package
 
 ## Feature Requirements
 
@@ -115,6 +124,7 @@ System actions:
 - compute SHA-256 hash
 - call notarization provider
 - persist certificate response
+- anchor digest on blockchain after certificate success
 
 Output:
 
@@ -123,7 +133,23 @@ Output:
 - file_hash
 - created_at
 
-### Feature C: Notification
+### Feature C: Litigation Trigger
+
+System actions:
+
+- generate demand letter draft
+- assemble evidence bundle
+- prepare lawyer handoff packet
+
+Output:
+
+- trigger_id
+- demand_letter_draft
+- evidence_bundle_url
+- anchor_proof
+- handoff_status
+
+### Feature D: Notification
 
 Trigger:
 
@@ -159,6 +185,13 @@ Action:
 - hash value
 - certificate link
 
+### Screen 5: Legal Trigger
+
+- demand letter draft CTA
+- evidence bundle CTA
+- blockchain anchor proof
+- lawyer handoff CTA
+
 ## Non-Functional Requirements
 
 - credit lookup response <= 5 seconds average
@@ -172,6 +205,8 @@ Action:
 - nonexistent company returns a clean error state
 - empty file upload is blocked
 - notarization workflow returns a certificate record
+- blockchain anchor can be linked to a preserved evidence record
+- legal package can be generated after evidence is preserved
 - email notification triggers after successful notarization
 - all API requests are logged
 

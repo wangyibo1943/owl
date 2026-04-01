@@ -51,6 +51,8 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Real file upload storage
 - Real notarization provider integration
 - Real notification delivery
+- Blockchain anchoring implementation
+- Legal trigger package generation
 - Authentication
 - Payment logic
 
@@ -61,6 +63,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - [PRD](/Users/leo/owl/docs/tradeguard-prd.md)
 - [Sprint 1](/Users/leo/owl/docs/tradeguard-sprint-1.md)
 - [API Contract](/Users/leo/owl/docs/tradeguard-api-contract.md)
+- [Litigation Trigger Module](/Users/leo/owl/docs/litigation-trigger-module.md)
 
 ### Backend
 
@@ -197,7 +200,9 @@ Action:
 3. Add file storage path for evidence binaries
 4. Connect n8n workflow to real provider and verify certificate callback persistence
 5. Add certificate result polling or webhook callback completion
-6. Generate and wire full Flutter project
+6. Add blockchain anchor after notarization
+7. Add legal trigger package generation
+8. Generate and wire full Flutter project
 
 ## Definition of “Ready for Demo”
 
@@ -242,3 +247,4 @@ The repo can be considered demo-ready when all of the following are true:
 - lookup logging infrastructure added for Supabase
 - evidence upload connected to Supabase metadata persistence and n8n trigger path
 - notarization result callback route added for certificate persistence
+- litigation trigger module documented for the next product phase
