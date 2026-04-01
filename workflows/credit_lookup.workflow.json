@@ -15,17 +15,30 @@
     },
     {
       "parameters": {
-        "url": "={{$env.OPENCORPORATES_BASE_URL}}/companies/search?q={{$json.body.company_name}}&api_token={{$env.OPENCORPORATES_API_KEY}}"
+        "url": "={{$env.SEC_TICKERS_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{$env.SEC_USER_AGENT}}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        }
       },
-      "id": "http_open_corporates",
-      "name": "OpenCorporates Search",
+      "id": "http_sec_tickers",
+      "name": "SEC Ticker Index",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [460, 240]
     },
     {
       "parameters": {
-        "jsCode": "return [{ success: true, data: { company_name: $json.results?.companies?.[0]?.company?.name ?? null } }];"
+        "jsCode": "const body = $('Credit Webhook').first().json.body ?? {}; const searchName = String(body.company_name ?? '').toUpperCase().replace(/[.,'’&()/\\-]/g, ' ').replace(/\\s+/g, ' ').trim(); const companies = Object.values($json ?? {}); const normalize = (value) => String(value ?? '').toUpperCase().replace(/[.,'’&()/\\-]/g, ' ').replace(/\\s+/g, ' ').trim(); const scored = companies.map((company) => ({ company, score: normalize(company.title).includes(searchName) || searchName.includes(normalize(company.title)) ? 1 : 0, })).filter((entry) => entry.score > 0); const match = scored[0]?.company ?? null; return [{ success: true, data: { company_name: match?.title ?? null, registration_number: match?.cik_str ? `CIK ${String(match.cik_str).padStart(10, '0')}` : null, source_name: 'SEC EDGAR' } }];"
       },
       "id": "format_credit_response",
       "name": "Format Credit Response",
@@ -47,9 +60,9 @@
   ],
   "connections": {
     "Credit Webhook": {
-      "main": [[{ "node": "OpenCorporates Search", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "SEC Ticker Index", "type": "main", "index": 0 }]]
     },
-    "OpenCorporates Search": {
+    "SEC Ticker Index": {
       "main": [[{ "node": "Format Credit Response", "type": "main", "index": 0 }]]
     },
     "Format Credit Response": {
@@ -57,4 +70,3 @@
     }
   }
 }
-

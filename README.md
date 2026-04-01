@@ -37,7 +37,7 @@ Tariff risk is documented for Phase 2 and not included in the first engineering 
 - Flutter mobile skeleton is included
 - n8n workflow JSON drafts are included
 - Supabase schema draft is included
-- credit lookup service is wired for OpenCorporates integration structure
+- credit lookup service is wired for SEC EDGAR and California SOS provider routing
 
 ## Recommended Sprint 1 Build Order
 
@@ -56,7 +56,7 @@ Create environment files from:
 ## Backend Status
 
 - `GET /v1/health` is implemented
-- `POST /v1/credit/lookup` now expects a real `OPENCORPORATES_API_KEY`
+- `POST /v1/credit/lookup` now supports free SEC EDGAR lookups and optional California SOS lookups
 - `POST /v1/evidence/upload` now persists evidence metadata and triggers n8n when configured
 - `GET /v1/evidence/:evidenceId/certificate` now returns stored certificate state when available
 

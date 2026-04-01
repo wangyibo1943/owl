@@ -112,7 +112,7 @@ Why:
 
 - Nest app bootstrapped manually
 - `health`, `credit`, and `evidence` modules exist
-- credit lookup calls OpenCorporates structure and logs to Supabase when configured
+- credit lookup routes between SEC EDGAR and California SOS and logs to Supabase when configured
 - evidence upload stores metadata and triggers n8n when configured
 - certificate query reads stored certificate state
 - internal callback route exists for notarization result persistence
@@ -220,7 +220,7 @@ Store:
 2. Read [tradeguard-api-contract.md](/Users/leo/owl/docs/tradeguard-api-contract.md)
 3. Read [engineering-progress-manual.md](/Users/leo/owl/docs/engineering-progress-manual.md)
 4. Run backend locally
-5. Configure OpenCorporates and Supabase credentials
+5. Configure SEC headers, California SOS key, and Supabase credentials
 6. Set up Supabase
 7. Import n8n workflows
 8. Then generate the Flutter app structure
@@ -229,7 +229,8 @@ Store:
 
 The following values will be needed before the repo becomes fully functional:
 
-- OpenCorporates API key
+- California SOS API key
+- SEC user agent string
 - Supabase URL
 - Supabase service role key
 - n8n base URL

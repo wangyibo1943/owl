@@ -25,7 +25,8 @@ Acceptance:
 ### TG-002 Credit Lookup API
 
 - Create `POST /v1/credit/lookup`
-- Integrate OpenCorporates adapter
+- Integrate SEC EDGAR adapter
+- Integrate California SOS adapter
 - Map company data to standard DTO
 - Compute grade and risk flags with rule-based scoring
 
@@ -104,4 +105,3 @@ Acceptance:
 - invalid website -> validation message
 - invalid file type -> upload blocked
 - zero-byte file -> upload blocked
-

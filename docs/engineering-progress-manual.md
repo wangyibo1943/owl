@@ -30,7 +30,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Flutter mobile skeleton is created
 - Backend dependencies are installed
 - Backend build passes locally
-- OpenCorporates credit lookup structure is implemented
+- SEC EDGAR and California SOS credit provider routing is implemented
 - Supabase lookup persistence infrastructure is implemented
 - Evidence upload persistence and n8n trigger structure are implemented
 - Certificate status route can read stored records from Supabase
@@ -38,7 +38,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 
 ### Partially Completed
 
-- Credit lookup API route is wired to OpenCorporates and first-pass grading rules
+- Credit lookup API route is wired to SEC EDGAR and California SOS with first-pass grading rules
 - Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
@@ -46,7 +46,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 
 ### Not Started
 
-- Real OpenCorporates integration
+- California SOS live credential integration
 - Full production-grade risk scoring engine
 - Real file upload storage
 - Real notarization provider integration
@@ -93,7 +93,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - `apps/backend` dependency install completed
 - `apps/backend` Nest build completed
 - repo structure is consistent
-- credit lookup provider structure is implemented
+- credit lookup provider router is implemented
 - company lookup logging can write to Supabase when credentials are present
 - evidence metadata can write to Supabase and trigger n8n webhook when configured
 - certificate route can return stored status instead of placeholder data
@@ -167,7 +167,7 @@ Impact:
 
 Action:
 
-- Replace mock scoring in [credit.service.ts](/Users/leo/owl/apps/backend/src/modules/credit/credit.service.ts)
+- Calibrate score rules against real California and SEC samples in [credit.service.ts](/Users/leo/owl/apps/backend/src/modules/credit/credit.service.ts)
 
 ### Risk 3: Evidence Upload Is Metadata-Backed, Not File-Storage-Backed
 
@@ -192,7 +192,7 @@ Action:
 
 ## Recommended Next Build Order
 
-1. Connect backend credit lookup to OpenCorporates
+1. Verify California SOS key with the new provider router
 2. Strengthen deterministic credit grading rules
 3. Add file storage path for evidence binaries
 4. Connect n8n workflow to real provider and verify certificate callback persistence
@@ -213,7 +213,8 @@ The repo can be considered demo-ready when all of the following are true:
 
 ### Backend Engineer
 
-- OpenCorporates adapter
+- SEC EDGAR adapter
+- California SOS adapter
 - scoring engine
 - Supabase integration
 - evidence upload pipeline
@@ -237,7 +238,7 @@ The repo can be considered demo-ready when all of the following are true:
 
 - Repository rebuilt as TradeGuard MVP
 - docs, backend skeleton, mobile skeleton, Supabase schema, and n8n drafts added
-- credit lookup connected to OpenCorporates request flow
+- credit lookup connected to SEC EDGAR and California SOS request flow
 - lookup logging infrastructure added for Supabase
 - evidence upload connected to Supabase metadata persistence and n8n trigger path
 - notarization result callback route added for certificate persistence

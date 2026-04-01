@@ -6,10 +6,13 @@ export class CreditLookupDto {
 
   @IsOptional()
   @IsString()
+  company_state?: string;
+
+  @IsOptional()
+  @IsString()
   ein?: string;
 
   @IsOptional()
   @IsUrl()
   website?: string;
 }
-

@@ -26,6 +26,7 @@ Request:
 ```json
 {
   "company_name": "Apple Inc.",
+  "company_state": null,
   "ein": null,
   "website": "https://apple.com"
 }
@@ -38,16 +39,27 @@ Success:
   "success": true,
   "data": {
     "company_name": "Apple Inc.",
-    "jurisdiction": "us_ca",
-    "registration_number": "C0806592",
-    "status": "Active",
-    "incorporation_date": "1977-01-03",
+    "jurisdiction": "US-DE",
+    "registration_number": "CIK 0000320193",
+    "status": "SEC Reporting Entity",
+    "incorporation_date": null,
     "credit_grade": "A",
     "risk_flags": [],
-    "summary": "Entity is active with long operating history and no basic structural red flags.",
-    "source_name": "OpenCorporates",
-    "source_url": "https://opencorporates.com/..."
+    "summary": "SEC EDGAR data indicates a structurally stable entity. Current grade is A.",
+    "source_name": "SEC EDGAR",
+    "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193"
   }
+}
+```
+
+California private-company request example:
+
+```json
+{
+  "company_name": "Pure Forest LLC",
+  "company_state": "CA",
+  "ein": null,
+  "website": null
 }
 ```
 
@@ -156,3 +168,4 @@ Success:
 - `PROVIDER_ERROR`
 - `VALIDATION_ERROR`
 - `EVIDENCE_NOT_FOUND`
+- `UNSUPPORTED_STATE`

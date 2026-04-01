@@ -79,6 +79,7 @@ As a seller, I want to receive notification after notarization finishes so I kno
 Input:
 
 - company_name
+- optional company_state
 - optional ein
 - optional website
 
@@ -91,10 +92,12 @@ Output:
 
 Primary data source:
 
-- OpenCorporates
+- SEC EDGAR for US public companies
+- California SOS API for California private companies
 
 Future source:
 
+- Delaware and other state registries
 - Experian or other commercial credit provider
 
 ### Feature B: Evidence Notarization
@@ -178,4 +181,3 @@ Action:
 - HS code risk hints
 - DDP risk recommendations
 - pricing and subscriptions
-
