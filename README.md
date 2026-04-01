@@ -67,6 +67,7 @@ Create environment files from:
 - `GET /v1/legal/triggers/:triggerId` now returns stored legal trigger state when available
 - `POST /v1/legal/triggers/:triggerId/demand-letter` now generates and stores a first-pass demand letter draft
 - `POST /v1/legal/triggers/:triggerId/bundle` now generates and stores a first-pass evidence bundle manifest
+- `POST /v1/legal/triggers/:triggerId/handoff` now prepares a first-pass lawyer handoff packet
 
 ## Key Docs
 

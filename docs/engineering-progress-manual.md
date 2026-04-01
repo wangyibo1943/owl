@@ -39,6 +39,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Legal trigger API skeleton is implemented
 - Demand letter draft API skeleton is implemented
 - Evidence bundle API skeleton is implemented
+- Lawyer handoff API skeleton is implemented
 
 ### Partially Completed
 
@@ -49,6 +50,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Legal trigger route persists first-pass case intake state, but does not yet generate demand letters or evidence bundles
 - Demand letter route generates a stored draft, but does not yet export PDF or DOCX artifacts
 - Evidence bundle route generates a stored manifest, but does not yet export a real ZIP package
+- Lawyer handoff route prepares a structured handoff packet, but does not yet send it to an external law firm system
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
 - Flutter app screens exist as a manual skeleton, not a generated Flutter project
 
@@ -113,6 +115,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - legal trigger route can persist and read stored intake state when schema is present
 - demand letter route can generate and read stored draft state when schema is present
 - evidence bundle route can generate and read stored manifest state when schema is present
+- lawyer handoff route can assemble a structured intake packet without new schema changes
 - backend is deployed on the server and health endpoint responds from `wehom.net`
 - anchor route has been exercised against live Supabase with a completed evidence record
 
@@ -126,6 +129,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - legal trigger workflow steps after intake are not implemented yet
 - demand letter export artifacts are not implemented yet
 - evidence bundle ZIP export is not implemented yet
+- lawyer handoff is not connected to a real external intake or email delivery system yet
 - live Supabase still needs the latest `legal_triggers` table migration before `/v1/legal/trigger` can persist records
 
 ## Build and Run Notes
@@ -273,4 +277,5 @@ The repo can be considered demo-ready when all of the following are true:
 - legal trigger intake API skeleton added
 - demand letter draft API skeleton added
 - evidence bundle API skeleton added
+- lawyer handoff API skeleton added
 - live server deployment updated with anchor and legal trigger routes

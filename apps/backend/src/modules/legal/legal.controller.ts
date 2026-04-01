@@ -25,4 +25,9 @@ export class LegalController {
   generateEvidenceBundle(@Param('triggerId') triggerId: string) {
     return this.legalService.generateEvidenceBundle(triggerId);
   }
+
+  @Post('triggers/:triggerId/handoff')
+  generateLawyerHandoff(@Param('triggerId') triggerId: string) {
+    return this.legalService.generateLawyerHandoff(triggerId);
+  }
 }

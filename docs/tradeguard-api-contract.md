@@ -347,6 +347,33 @@ Success:
 }
 ```
 
+### `POST /legal/triggers/:triggerId/handoff`
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "legal_trigger_id": "ltr_789",
+    "evidence_id": "evd_123",
+    "handoff_status": "READY",
+    "lawyer_contact": "intake@usfirm.com",
+    "packet": {
+      "case_summary": {
+        "legal_trigger_id": "ltr_789",
+        "seller_name": "Shenzhen Acme Trading Co., Ltd.",
+        "buyer_name": "Buyer LLC"
+      },
+      "generated_assets": {
+        "bundle_id": "ebd_001",
+        "bundle_url": "tradeguard://legal-bundles/ltr_789"
+      }
+    }
+  }
+}
+```
+
 ## Error Codes
 
 - `COMPANY_NOT_FOUND`
@@ -365,3 +392,4 @@ Success:
 - `LEGAL_TRIGGER_CREATE_FAILED`
 - `DEMAND_LETTER_CREATE_FAILED`
 - `EVIDENCE_BUNDLE_CREATE_FAILED`
+- `BUNDLE_NOT_READY`
