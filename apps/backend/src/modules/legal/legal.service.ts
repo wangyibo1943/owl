@@ -323,9 +323,27 @@ export class LegalService {
     );
 
     if (existingDraft) {
+      const artifacts = await this.ensureDemandLetterArtifacts(
+        trigger,
+        existingDraft,
+      );
+
       return {
         success: true,
-        data: this.mapDemandLetterResponse(existingDraft, trigger),
+        data: this.mapDemandLetterResponse(
+          {
+            ...existingDraft,
+            export_url: artifacts.pdf.download_url,
+            provider_payload: {
+              ...(existingDraft.provider_payload ?? {}),
+              pdf_url: artifacts.pdf.download_url,
+              pdf_storage_path: artifacts.pdf.storage_path,
+              docx_url: artifacts.docx.download_url,
+              docx_storage_path: artifacts.docx.storage_path,
+            },
+          },
+          trigger,
+        ),
       };
     }
 
