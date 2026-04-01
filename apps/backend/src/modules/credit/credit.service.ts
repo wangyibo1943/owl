@@ -20,6 +20,8 @@ type NormalizedCompanyRecord = {
   sicCode: string | null;
   sicDescription: string | null;
   website: string | null;
+  websiteMatch: 'VERIFIED' | 'PROBABLE' | 'MISMATCH' | 'UNKNOWN';
+  websiteProvided: boolean;
   sourceName: 'California SOS' | 'SEC EDGAR' | 'GLEIF';
   sourceUrl: string | null;
   agentName: string | null;
@@ -98,6 +100,7 @@ export class CreditService {
       sic_code: company.sicCode,
       sic_description: company.sicDescription,
       website: company.website,
+      website_match: company.websiteMatch,
       credit_grade: evaluation.creditGrade,
       risk_score: evaluation.riskScore,
       risk_flags: evaluation.riskFlags,
@@ -278,6 +281,8 @@ export class CreditService {
       sicCode: null,
       sicDescription: null,
       website: null,
+      websiteMatch: 'UNKNOWN',
+      websiteProvided: false,
       sourceName: 'California SOS',
       sourceUrl: entity.EntityID
         ? `https://bizfileonline.sos.ca.gov/search/business?filing=${encodeURIComponent(
@@ -339,7 +344,8 @@ export class CreditService {
       return null;
     }
 
-    const websiteHost = this.extractHostname(website);
+    const requestedWebsite = this.normalizeWebsite(website);
+    const websiteHost = this.extractHostname(requestedWebsite);
     const enrichedCandidates = await Promise.all(
       candidates.map(async ({ company, score }) => {
         if (!company.cik_str) {
@@ -368,12 +374,17 @@ export class CreditService {
           submissions.website && String(submissions.website).trim().length > 0
             ? String(submissions.website).trim()
             : null;
-        const websiteScore =
-          websiteHost && secWebsite
-            ? this.extractHostname(secWebsite) === websiteHost
-              ? 40
-              : 0
-            : 0;
+        const websiteMatch = this.classifyWebsiteMatch({
+          requestedWebsite,
+          requestedHost: websiteHost,
+          authoritativeWebsite: secWebsite,
+          companyName: company.title ?? '',
+          ticker:
+            company.ticker && String(company.ticker).trim().length > 0
+              ? String(company.ticker).trim()
+              : null,
+        });
+        const websiteScore = this.websiteMatchScore(websiteMatch);
 
         return {
           company,
@@ -381,6 +392,7 @@ export class CreditService {
           score: score + websiteScore,
           submissions,
           secWebsite,
+          websiteMatch,
         };
       }),
     );
@@ -436,6 +448,8 @@ export class CreditService {
       sicCode: sic,
       sicDescription,
       website: bestCandidate.secWebsite,
+      websiteMatch: bestCandidate.websiteMatch,
+      websiteProvided: Boolean(requestedWebsite),
       sourceName: 'SEC EDGAR',
       sourceUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${bestCandidate.cik}`,
       agentName: null,
@@ -594,6 +608,8 @@ export class CreditService {
           ? `LEI ${String(registration.status).trim()}`
           : null,
       website: null,
+      websiteMatch: 'UNKNOWN',
+      websiteProvided: false,
       sourceName: 'GLEIF',
       sourceUrl: lei
         ? `https://search.gleif.org/#/record/${encodeURIComponent(lei)}`
@@ -691,6 +707,16 @@ export class CreditService {
       riskFlags.push('MISSING_PUBLIC_WEBSITE');
     }
 
+    if (company.websiteMatch === 'MISMATCH') {
+      score -= 25;
+      riskFlags.push('WEBSITE_MISMATCH');
+    }
+
+    if (company.websiteProvided && company.websiteMatch === 'UNKNOWN') {
+      score -= 5;
+      riskFlags.push('INPUT_WEBSITE_NOT_VERIFIED');
+    }
+
     if (company.sourceName === 'GLEIF' && !company.lei) {
       score -= 10;
       riskFlags.push('MISSING_LEI');
@@ -763,6 +789,12 @@ export class CreditService {
       score += 5;
     }
 
+    if (company.websiteMatch === 'VERIFIED') {
+      score += 5;
+    } else if (company.websiteMatch === 'PROBABLE') {
+      score += 2;
+    }
+
     if (
       company.sourceName === 'California SOS' &&
       company.supportsRegistryStatus &&
@@ -818,7 +850,7 @@ export class CreditService {
 
     return `Entity grade is ${creditGrade}. Source is ${company.sourceName}. Registry review found the following risk flags: ${riskFlags.join(
       ', ',
-    )}. Current status is ${company.status ?? 'Unknown'}, jurisdiction is ${company.jurisdiction ?? 'not available'}, match confidence is ${company.matchConfidence.toLowerCase()}, and latest filing date is ${company.lastFilingDate ?? 'not available'}.`;
+    )}. Current status is ${company.status ?? 'Unknown'}, jurisdiction is ${company.jurisdiction ?? 'not available'}, website match is ${company.websiteMatch.toLowerCase()}, match confidence is ${company.matchConfidence.toLowerCase()}, and latest filing date is ${company.lastFilingDate ?? 'not available'}.`;
   }
 
   private describeProvider(companyState: string | null) {
@@ -842,7 +874,7 @@ export class CreditService {
       .toUpperCase()
       .replace(/[.,'’&()/\-]/g, ' ')
       .replace(
-        /\b(CORPORATION|CORP|INCORPORATED|INC|COMPANY|CO|LIMITED|LTD|LLC|L\.L\.C|LP|L\.P|PLC|HOLDINGS?)\b/g,
+        /\b(CORPORATION|CORP|INCORPORATED|INC|COMPANY|CO|LIMITED|LTD|LLC|L\.L\.C|LP|L\.P|PLC|HOLDINGS?|GROUP|GLOBAL|INTERNATIONAL|TECHNOLOGIES|TECHNOLOGY|SOLUTIONS|SYSTEMS|SERVICES)\b/g,
         ' ',
       )
       .replace(/\s+/g, ' ')
@@ -922,6 +954,94 @@ export class CreditService {
     } catch {
       return null;
     }
+  }
+
+  private normalizeWebsite(urlValue: string | null) {
+    if (!urlValue) return null;
+
+    try {
+      const normalized = /^https?:\/\//i.test(urlValue)
+        ? urlValue
+        : `https://${urlValue}`;
+      const url = new URL(normalized);
+      return `${url.protocol}//${url.hostname}${url.pathname === '/' ? '' : url.pathname}`;
+    } catch {
+      return null;
+    }
+  }
+
+  private classifyWebsiteMatch(input: {
+    requestedWebsite: string | null;
+    requestedHost: string | null;
+    authoritativeWebsite: string | null;
+    companyName: string;
+    ticker: string | null;
+  }): 'VERIFIED' | 'PROBABLE' | 'MISMATCH' | 'UNKNOWN' {
+    const authoritativeHost = this.extractHostname(input.authoritativeWebsite);
+
+    if (!input.requestedHost) {
+      return authoritativeHost ? 'UNKNOWN' : 'UNKNOWN';
+    }
+
+    if (authoritativeHost) {
+      return this.extractDomainRoot(authoritativeHost) ===
+          this.extractDomainRoot(input.requestedHost)
+        ? 'VERIFIED'
+        : 'MISMATCH';
+    }
+
+    return this.domainMatchesEntity(
+      input.requestedHost,
+      input.companyName,
+      input.ticker,
+    )
+      ? 'PROBABLE'
+      : 'UNKNOWN';
+  }
+
+  private websiteMatchScore(
+    websiteMatch: 'VERIFIED' | 'PROBABLE' | 'MISMATCH' | 'UNKNOWN',
+  ) {
+    switch (websiteMatch) {
+      case 'VERIFIED':
+        return 40;
+      case 'PROBABLE':
+        return 15;
+      case 'MISMATCH':
+        return -20;
+      default:
+        return 0;
+    }
+  }
+
+  private domainMatchesEntity(
+    hostname: string,
+    companyName: string,
+    ticker: string | null,
+  ) {
+    const root = this.extractDomainRoot(hostname);
+    const normalizedName = this.normalizeCompanyName(companyName);
+    const tokens = normalizedName.split(' ').filter((token) => token.length >= 3);
+
+    if (ticker && root === ticker.trim().toLowerCase()) {
+      return true;
+    }
+
+    if (tokens.length === 0) {
+      return false;
+    }
+
+    return tokens.some((token) => root.includes(token.toLowerCase()));
+  }
+
+  private extractDomainRoot(hostname: string) {
+    const parts = hostname.toLowerCase().split('.').filter(Boolean);
+
+    if (parts.length <= 2) {
+      return parts[0] ?? hostname.toLowerCase();
+    }
+
+    return parts[parts.length - 2] ?? hostname.toLowerCase();
   }
 
   private extractLastFilingDate(payload: Record<string, unknown>) {
