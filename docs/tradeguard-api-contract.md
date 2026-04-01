@@ -159,6 +159,60 @@ Success:
 }
 ```
 
+## 6. Blockchain Anchor
+
+### `POST /evidence/:evidenceId/anchor`
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "evidence_id": "evd_123",
+    "anchor_id": "anc_456",
+    "chain_name": "Base Sepolia",
+    "provider_name": "MockAnchorProvider",
+    "transaction_hash": "0xabc123",
+    "anchor_status": "ANCHORED",
+    "anchor_proof_url": "https://explorer.example/tx/0xabc123",
+    "anchored_hash": "sha256:abc123",
+    "created_at": "2026-04-01T19:40:00Z"
+  }
+}
+```
+
+Validation Error:
+
+```json
+{
+  "success": false,
+  "error_code": "CERTIFICATE_NOT_READY",
+  "message": "Evidence must have a completed notarization certificate before anchoring"
+}
+```
+
+### `GET /evidence/:evidenceId/anchor`
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "evidence_id": "evd_123",
+    "anchor_id": "anc_456",
+    "chain_name": "Base Sepolia",
+    "provider_name": "MockAnchorProvider",
+    "transaction_hash": "0xabc123",
+    "anchor_status": "ANCHORED",
+    "anchor_proof_url": "https://explorer.example/tx/0xabc123",
+    "anchored_hash": "sha256:abc123",
+    "created_at": "2026-04-01T19:40:00Z"
+  }
+}
+```
+
 ## Error Codes
 
 - `COMPANY_NOT_FOUND`
@@ -169,3 +223,6 @@ Success:
 - `VALIDATION_ERROR`
 - `EVIDENCE_NOT_FOUND`
 - `UNSUPPORTED_STATE`
+- `CERTIFICATE_NOT_READY`
+- `ANCHOR_NOT_FOUND`
+- `ANCHOR_PERSIST_FAILED`

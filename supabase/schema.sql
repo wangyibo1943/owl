@@ -38,6 +38,19 @@ create table if not exists public.notarization_certificates (
     created_at timestamptz not null default now()
 );
 
+create table if not exists public.blockchain_anchors (
+    id uuid primary key default gen_random_uuid(),
+    evidence_id uuid not null references public.evidence_records(id) on delete cascade,
+    chain_name text not null,
+    provider_name text not null,
+    transaction_hash text not null,
+    anchor_status text not null,
+    anchor_proof_url text,
+    anchored_hash text not null,
+    provider_payload jsonb,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists public.workflow_logs (
     id uuid primary key default gen_random_uuid(),
     workflow_name text not null,
@@ -56,3 +69,5 @@ create index if not exists idx_evidence_records_status
 create index if not exists idx_notarization_certificates_evidence_id
     on public.notarization_certificates(evidence_id);
 
+create unique index if not exists idx_blockchain_anchors_evidence_id
+    on public.blockchain_anchors(evidence_id);

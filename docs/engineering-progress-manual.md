@@ -35,12 +35,14 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Evidence upload persistence and n8n trigger structure are implemented
 - Certificate status route can read stored records from Supabase
 - Internal notarization callback route is implemented for workflow result persistence
+- Blockchain anchor API skeleton is implemented
 
 ### Partially Completed
 
 - Credit lookup API route is wired to SEC EDGAR and California SOS with first-pass grading rules
 - Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
+- Blockchain anchor route persists a first-pass anchor record, but still uses a mock anchor provider
 - n8n workflow draft now includes backend callback persistence, but still needs real provider field mapping
 - Flutter app screens exist as a manual skeleton, not a generated Flutter project
 
