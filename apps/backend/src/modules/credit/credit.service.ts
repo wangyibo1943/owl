@@ -13,6 +13,7 @@ type NormalizedCompanyRecord = {
   jurisdiction: string | null;
   status: string | null;
   incorporationDate: string | null;
+  website: string | null;
   sourceName: 'California SOS' | 'SEC EDGAR';
   sourceUrl: string | null;
   agentName: string | null;
@@ -25,7 +26,15 @@ type NormalizedCompanyRecord = {
   branch?: boolean;
   supportsRegistryStatus: boolean;
   supportsIncorporationDate: boolean;
+  matchConfidence: 'HIGH' | 'MEDIUM' | 'LOW';
   rawPayload: Record<string, unknown>;
+};
+
+type RiskEvaluation = {
+  creditGrade: 'A' | 'B' | 'C' | 'D';
+  riskScore: number;
+  riskFlags: string[];
+  summary: string;
 };
 
 @Injectable()
@@ -44,7 +53,11 @@ export class CreditService {
   async lookup(payload: CreditLookupDto) {
     const companyName = payload.company_name.trim();
     const companyState = payload.company_state?.trim().toUpperCase() ?? null;
-    const company = await this.lookupCompany(companyName, companyState);
+    const company = await this.lookupCompany(
+      companyName,
+      companyState,
+      payload.website ?? null,
+    );
 
     if (!company) {
       await this.logLookup({
@@ -72,8 +85,11 @@ export class CreditService {
       registration_number: company.registrationNumber,
       status: company.status ?? 'Unknown',
       incorporation_date: company.incorporationDate,
+      website: company.website,
       credit_grade: evaluation.creditGrade,
+      risk_score: evaluation.riskScore,
       risk_flags: evaluation.riskFlags,
+      match_confidence: company.matchConfidence,
       summary: evaluation.summary,
       source_name: company.sourceName,
       source_url: company.sourceUrl,
@@ -100,6 +116,7 @@ export class CreditService {
   private async lookupCompany(
     companyName: string,
     companyState: string | null,
+    website: string | null,
   ): Promise<NormalizedCompanyRecord | null> {
     if (companyState && companyState !== 'CA') {
       throw new BadRequestException({
@@ -114,7 +131,7 @@ export class CreditService {
       return this.lookupCaliforniaCompany(companyName);
     }
 
-    const secMatch = await this.lookupSecCompany(companyName);
+    const secMatch = await this.lookupSecCompany(companyName, website);
     if (secMatch) {
       return secMatch;
     }
@@ -228,6 +245,7 @@ export class CreditService {
       incorporationDate: entity.FilingDate
         ? String(entity.FilingDate).slice(0, 10)
         : null,
+      website: null,
       sourceName: 'California SOS',
       sourceUrl: entity.EntityID
         ? `https://bizfileonline.sos.ca.gov/search/business?filing=${encodeURIComponent(
@@ -244,12 +262,14 @@ export class CreditService {
       branch: /foreign/i.test(String(entity.EntityType ?? '')),
       supportsRegistryStatus: true,
       supportsIncorporationDate: true,
+      matchConfidence: 'HIGH',
       rawPayload: entity,
     };
   }
 
   private async lookupSecCompany(
     companyName: string,
+    website: string | null,
   ): Promise<NormalizedCompanyRecord | null> {
     const response = await fetch(this.secTickersUrl, {
       headers: this.secHeaders(),
@@ -274,50 +294,96 @@ export class CreditService {
 
     const companies = Object.values(payload);
     const normalizedTarget = this.normalizeCompanyName(companyName);
-    const match = companies
+    const candidates = companies
       .map((company) => ({
         company,
         score: this.scoreNameMatch(company.title ?? '', normalizedTarget),
       }))
       .filter((entry) => entry.score > 0)
-      .sort((left, right) => right.score - left.score)[0]?.company;
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 5);
 
-    if (!match?.cik_str) {
+    if (candidates.length === 0) {
       return null;
     }
 
-    const cik = String(match.cik_str).padStart(10, '0');
-    const submissionsUrl = `${this.secDataBaseUrl}/submissions/CIK${cik}.json`;
-    const submissionsResponse = await fetch(submissionsUrl, {
-      headers: this.secHeaders(),
-    });
+    const websiteHost = this.extractHostname(website);
+    const enrichedCandidates = await Promise.all(
+      candidates.map(async ({ company, score }) => {
+        if (!company.cik_str) {
+          return null;
+        }
 
-    if (!submissionsResponse.ok) {
-      throw new InternalServerErrorException({
-        success: false,
-        error_code: 'UPSTREAM_PROVIDER_ERROR',
-        message: `SEC submissions returned ${submissionsResponse.status}`,
-      });
+        const cik = String(company.cik_str).padStart(10, '0');
+        const submissionsUrl = `${this.secDataBaseUrl}/submissions/CIK${cik}.json`;
+        const submissionsResponse = await fetch(submissionsUrl, {
+          headers: this.secHeaders(),
+        });
+
+        if (!submissionsResponse.ok) {
+          throw new InternalServerErrorException({
+            success: false,
+            error_code: 'UPSTREAM_PROVIDER_ERROR',
+            message: `SEC submissions returned ${submissionsResponse.status}`,
+          });
+        }
+
+        const submissions = (await submissionsResponse.json()) as Record<
+          string,
+          unknown
+        >;
+        const secWebsite =
+          submissions.website && String(submissions.website).trim().length > 0
+            ? String(submissions.website).trim()
+            : null;
+        const websiteScore =
+          websiteHost && secWebsite
+            ? this.extractHostname(secWebsite) === websiteHost
+              ? 40
+              : 0
+            : 0;
+
+        return {
+          company,
+          cik,
+          score: score + websiteScore,
+          submissions,
+          secWebsite,
+        };
+      }),
+    );
+
+    const bestCandidate = enrichedCandidates
+      .filter((candidate): candidate is NonNullable<typeof candidate> =>
+        Boolean(candidate),
+      )
+      .sort((left, right) => right.score - left.score)[0];
+
+    if (!bestCandidate) {
+      return null;
     }
 
-    const submissions = (await submissionsResponse.json()) as Record<
-      string,
-      unknown
-    >;
     const stateOfIncorporation =
-      submissions.stateOfIncorporation &&
-      String(submissions.stateOfIncorporation).trim().length > 0
-        ? String(submissions.stateOfIncorporation).trim().toUpperCase()
+      bestCandidate.submissions.stateOfIncorporation &&
+      String(bestCandidate.submissions.stateOfIncorporation).trim().length > 0
+        ? String(bestCandidate.submissions.stateOfIncorporation)
+            .trim()
+            .toUpperCase()
         : null;
 
     return {
-      name: String(submissions.name ?? match.title ?? companyName),
-      registrationNumber: `CIK ${cik}`,
+      name: String(
+        bestCandidate.submissions.name ??
+          bestCandidate.company.title ??
+          companyName,
+      ),
+      registrationNumber: `CIK ${bestCandidate.cik}`,
       jurisdiction: stateOfIncorporation ? `US-${stateOfIncorporation}` : 'US',
       status: 'SEC Reporting Entity',
       incorporationDate: null,
+      website: bestCandidate.secWebsite,
       sourceName: 'SEC EDGAR',
-      sourceUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}`,
+      sourceUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${bestCandidate.cik}`,
       agentName: null,
       agentAddress1: null,
       agentAddress2: null,
@@ -328,7 +394,8 @@ export class CreditService {
       branch: false,
       supportsRegistryStatus: false,
       supportsIncorporationDate: false,
-      rawPayload: submissions,
+      matchConfidence: this.mapMatchConfidence(bestCandidate.score),
+      rawPayload: bestCandidate.submissions,
     };
   }
 
@@ -370,6 +437,25 @@ export class CreditService {
       riskFlags.push('PO_BOX_AGENT');
     }
 
+    if (!company.jurisdiction || company.jurisdiction === 'US') {
+      score -= 5;
+      riskFlags.push('LIMITED_JURISDICTION_DATA');
+    }
+
+    if (company.sourceName === 'SEC EDGAR' && !company.website) {
+      score -= 5;
+      riskFlags.push('MISSING_PUBLIC_WEBSITE');
+    }
+
+    if (
+      company.sourceName === 'California SOS' &&
+      !company.agentAddress1 &&
+      !company.agentCity
+    ) {
+      score -= 10;
+      riskFlags.push('MISSING_AGENT_ADDRESS');
+    }
+
     if (company.supportsIncorporationDate && incorporationDate) {
       const ageInYears =
         (Date.now() - incorporationDate.getTime()) /
@@ -377,17 +463,30 @@ export class CreditService {
       if (ageInYears < 1) {
         score -= 20;
         riskFlags.push('NEW_ENTITY');
+      } else if (ageInYears >= 5) {
+        score += 5;
       }
     } else if (company.supportsIncorporationDate) {
       score -= 10;
       riskFlags.push('MISSING_INCORPORATION_DATE');
     }
 
+    if (company.matchConfidence === 'LOW') {
+      score -= 15;
+      riskFlags.push('LOW_MATCH_CONFIDENCE');
+    } else if (company.matchConfidence === 'MEDIUM') {
+      score -= 5;
+      riskFlags.push('MEDIUM_MATCH_CONFIDENCE');
+    }
+
+    score = Math.max(0, Math.min(100, score));
+
     const creditGrade = this.mapScoreToGrade(score);
     const summary = this.buildSummary(creditGrade, riskFlags, company);
 
     return {
       creditGrade,
+      riskScore: score,
       riskFlags,
       summary,
     };
@@ -406,12 +505,12 @@ export class CreditService {
     company: NormalizedCompanyRecord,
   ) {
     if (riskFlags.length === 0) {
-      return `${company.sourceName} data indicates a structurally stable entity. Current grade is ${creditGrade}.`;
+      return `${company.sourceName} data indicates a structurally stable entity with high registry confidence. Current grade is ${creditGrade}.`;
     }
 
     return `Entity grade is ${creditGrade}. Registry review found the following risk flags: ${riskFlags.join(
       ', ',
-    )}. Current status is ${company.status ?? 'Unknown'}.`;
+    )}. Current status is ${company.status ?? 'Unknown'}, and match confidence is ${company.matchConfidence.toLowerCase()}.`;
   }
 
   private describeProvider(companyState: string | null) {
@@ -461,6 +560,12 @@ export class CreditService {
       : 0;
   }
 
+  private mapMatchConfidence(score: number): 'HIGH' | 'MEDIUM' | 'LOW' {
+    if (score >= 100) return 'HIGH';
+    if (score >= 80) return 'MEDIUM';
+    return 'LOW';
+  }
+
   private isCaliforniaInactive(statusDescription: unknown) {
     const status = String(statusDescription ?? '').toLowerCase();
     return (
@@ -492,6 +597,19 @@ export class CreditService {
       .toUpperCase();
 
     return /\bP\.?\s*O\.?\s+BOX\b/.test(agentAddress);
+  }
+
+  private extractHostname(urlValue: string | null) {
+    if (!urlValue) return null;
+
+    try {
+      const normalized = /^https?:\/\//i.test(urlValue)
+        ? urlValue
+        : `https://${urlValue}`;
+      return new URL(normalized).hostname.replace(/^www\./i, '').toLowerCase();
+    } catch {
+      return null;
+    }
   }
 
   private async logLookup(payload: Record<string, unknown>) {

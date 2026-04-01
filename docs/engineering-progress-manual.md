@@ -31,6 +31,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 - Backend dependencies are installed
 - Backend build passes locally
 - SEC EDGAR and California SOS credit provider routing is implemented
+- Deterministic credit grading has been strengthened with risk score and match confidence output
 - Supabase lookup persistence infrastructure is implemented
 - Evidence upload persistence and n8n trigger structure are implemented
 - Certificate status route can read stored records from Supabase
@@ -46,6 +47,7 @@ It is intended for founders, engineers, and future collaborators who need a fast
 ### Partially Completed
 
 - Credit lookup API route is wired to SEC EDGAR and California SOS with first-pass grading rules
+- Credit lookup now evaluates website-aware SEC matches and emits `risk_score` plus `match_confidence`
 - Evidence upload API route persists metadata and triggers n8n, but does not yet store binary files in object storage
 - Certificate query route reads Supabase state, but still depends on external workflow/provider completion
 - Certificate download route depends on the provider certificate URL remaining available

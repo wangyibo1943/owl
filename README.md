@@ -59,6 +59,7 @@ Create environment files from:
 
 - `GET /v1/health` is implemented
 - `POST /v1/credit/lookup` now supports free SEC EDGAR lookups and optional California SOS lookups
+- credit lookup now returns `risk_score`, `match_confidence`, and website-aware SEC matching
 - `POST /v1/evidence/upload` now persists evidence metadata and triggers n8n when configured
 - `GET /v1/evidence/:evidenceId/certificate` now returns stored certificate state when available
 - `GET /v1/evidence/:evidenceId/certificate/download` now downloads the stored notarization certificate as an attachment

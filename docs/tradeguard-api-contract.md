@@ -43,8 +43,11 @@ Success:
     "registration_number": "CIK 0000320193",
     "status": "SEC Reporting Entity",
     "incorporation_date": null,
+    "website": "https://www.apple.com",
     "credit_grade": "A",
+    "risk_score": 95,
     "risk_flags": [],
+    "match_confidence": "HIGH",
     "summary": "SEC EDGAR data indicates a structurally stable entity. Current grade is A.",
     "source_name": "SEC EDGAR",
     "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193"
