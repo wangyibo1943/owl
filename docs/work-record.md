@@ -13,7 +13,7 @@ It answers two questions quickly:
 - Repo name: `owl`
 - Product name: `TradeGuard`
 - Current focus: buyer credit lookup and evidence notarization
-- Current phase: backend MVP mostly connected, frontend and real provider integrations still pending
+- Current phase: live backend and validated mobile client with remaining production hardening
 
 ## Completed Work
 
@@ -37,22 +37,26 @@ It answers two questions quickly:
 ### Credit Lookup
 
 - SEC EDGAR lookup integrated
+- GLEIF fallback integrated
 - California SOS provider route prepared
 - Credit lookup persistence added
 - Deterministic risk grading added
 - `risk_score` output added
 - `match_confidence` output added
 - Website-aware SEC matching added
+- Issuer metadata fields added to responses
 
 ### Evidence and Notarization
 
 - Evidence upload endpoint created
 - SHA-256 hashing implemented
 - Supabase evidence metadata persistence added
+- Supabase Storage object storage added for evidence files
 - n8n trigger flow added
 - Internal notarization callback added
 - Certificate status endpoint added
 - Certificate download endpoint added
+- Adobe Sign pending sync endpoint added
 
 ### Chain and Legal Flow
 
@@ -69,6 +73,9 @@ It answers two questions quickly:
 - Backend deployed to server
 - n8n deployed to server
 - Supabase connected
+- HTTPS enabled for `wehom.net` and `n8n.wehom.net`
+- Adobe Sign auto-sync timer added on the server
+- Flutter analyze, test, iOS simulator build, and Android debug build all passed locally
 - Live end-to-end backend chain tested multiple times
 
 ## Completed API Results
@@ -100,18 +107,15 @@ It answers two questions quickly:
 
 ### High Priority
 
-- Real Adobe Acrobat Sign integration
-- Real certificate file from production provider
-- Production-grade file storage
 - Stronger US company credit data depth
-- Mobile / frontend production integration
+- Mobile / frontend product polish
 
 ### Medium Priority
 
 - California SOS live credential setup
 - Production-grade scoring calibration
 - Notification delivery
-- Object storage for generated artifacts
+- Object storage for generated legal artifacts
 - Real PDF or DOCX export for demand letter
 
 ### Lower Priority For Current Focus
@@ -135,7 +139,7 @@ Lawyer delivery is explicitly deprioritized for now.
 ### 2026-04-01
 
 - Rebuilt the repository as TradeGuard MVP
-- Connected SEC EDGAR and California SOS provider routing
+- Connected SEC EDGAR, GLEIF, and California SOS provider routing
 - Implemented evidence upload, callback, and certificate flow
 - Added blockchain anchor route
 - Added legal trigger route
@@ -145,11 +149,14 @@ Lawyer delivery is explicitly deprioritized for now.
 - Added real legal bundle ZIP download
 - Added certificate download endpoint
 - Strengthened credit scoring with risk score and match confidence
+- Switched uploaded evidence files to Supabase Storage object storage
+- Enabled HTTPS for production endpoints
+- Added Adobe Sign periodic sync automation on the server
+- Validated Flutter analyze, test, iOS, and Android builds locally
 
 ## Recommended Next Work
 
-1. Replace test notarization provider with Adobe Acrobat Sign
-2. Keep certificate download endpoint, but back it with a real provider file
-3. Improve credit lookup precision and scoring confidence
-4. Move uploaded and generated files to object storage
-
+1. Improve credit lookup precision and scoring confidence
+2. Add California SOS live credential or another compliant private-company source
+3. Move generated legal artifacts to object storage
+4. Add stronger Adobe completion monitoring or webhook handling

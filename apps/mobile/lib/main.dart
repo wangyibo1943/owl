@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const TradeGuardApp());
@@ -197,7 +200,8 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ],
               ],
@@ -222,9 +226,7 @@ class EvidenceScreen extends StatefulWidget {
 
 class _EvidenceScreenState extends State<EvidenceScreen> {
   final _companyController = TextEditingController(text: 'Apple Inc.');
-  final _dealReferenceController =
-      TextEditingController(text: 'TG-MOBILE-001');
-  final _filenameController = TextEditingController(text: 'evidence.txt');
+  final _dealReferenceController = TextEditingController(text: 'TG-MOBILE-001');
   final _contentController = TextEditingController(
     text: 'Buyer acknowledged invoice and delivery timeline in writing.',
   );
@@ -232,6 +234,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
   bool _isSubmitting = false;
   bool _isRefreshing = false;
   String? _error;
+  LocalEvidenceFile? _selectedFile;
   EvidenceSubmissionResult? _submission;
   CertificateStatusResult? _certificate;
 
@@ -239,9 +242,40 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
   void dispose() {
     _companyController.dispose();
     _dealReferenceController.dispose();
-    _filenameController.dispose();
     _contentController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    setState(() {
+      _error = null;
+    });
+
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+      type: FileType.any,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final picked = result.files.first;
+    if (picked.bytes == null) {
+      setState(() {
+        _error = 'File bytes could not be loaded on this device.';
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedFile = LocalEvidenceFile(
+        filename: picked.name,
+        bytes: picked.bytes!,
+        mimeType: _mimeTypeFromFilename(picked.name),
+      );
+    });
   }
 
   Future<void> _submitEvidence() async {
@@ -251,15 +285,22 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
     });
 
     try {
+      final selectedFile = _selectedFile;
+      final fallbackText = _contentController.text.trim();
+
+      if (selectedFile == null && fallbackText.isEmpty) {
+        throw Exception('Choose a file or enter evidence text first.');
+      }
+
       final submission = await TradeGuardApi.instance.uploadEvidence(
         companyName: _companyController.text.trim(),
         dealReference: _dealReferenceController.text.trim().isEmpty
             ? null
             : _dealReferenceController.text.trim(),
-        filename: _filenameController.text.trim().isEmpty
-            ? 'evidence.txt'
-            : _filenameController.text.trim(),
-        textContent: _contentController.text,
+        filename: selectedFile?.filename ?? 'evidence-note.txt',
+        mimeType: selectedFile?.mimeType ?? 'text/plain',
+        fileBytes: selectedFile?.bytes ??
+            Uint8List.fromList(utf8.encode(fallbackText)),
       );
 
       final certificate =
@@ -293,7 +334,8 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
 
     try {
       await TradeGuardApi.instance.syncAdobe(evidenceId);
-      final certificate = await TradeGuardApi.instance.getCertificate(evidenceId);
+      final certificate =
+          await TradeGuardApi.instance.getCertificate(evidenceId);
 
       setState(() {
         _certificate = certificate;
@@ -308,6 +350,38 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
           _isRefreshing = false;
         });
       }
+    }
+  }
+
+  Future<void> _openCertificate() async {
+    final certificateUrl = _certificate?.certificateUrl;
+    if (certificateUrl == null || certificateUrl.isEmpty) return;
+
+    final launched = await launchUrl(
+      Uri.parse(certificateUrl),
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      setState(() {
+        _error = 'Certificate URL could not be opened.';
+      });
+    }
+  }
+
+  Future<void> _openEvidenceFile() async {
+    final evidenceId = _submission?.evidenceId;
+    if (evidenceId == null) return;
+
+    final launched = await launchUrl(
+      Uri.parse(TradeGuardApi.instance.evidenceFileUrl(evidenceId)),
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched && mounted) {
+      setState(() {
+        _error = 'Evidence file URL could not be opened.';
+      });
     }
   }
 
@@ -340,12 +414,18 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _dealReferenceController,
-                  decoration: const InputDecoration(labelText: 'Deal reference'),
+                  decoration:
+                      const InputDecoration(labelText: 'Deal reference'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _filenameController,
-                  decoration: const InputDecoration(labelText: 'Filename'),
+                OutlinedButton.icon(
+                  onPressed: _pickFile,
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(
+                    _selectedFile == null
+                        ? 'Choose evidence file'
+                        : _selectedFile!.filename,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -353,7 +433,7 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                   minLines: 6,
                   maxLines: 10,
                   decoration: const InputDecoration(
-                    labelText: 'Evidence content',
+                    labelText: 'Evidence note (optional fallback)',
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -374,7 +454,8 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
                   const SizedBox(height: 12),
                   Text(
                     _error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ],
               ],
@@ -388,6 +469,8 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
             certificate: _certificate,
             isRefreshing: _isRefreshing,
             onRefresh: _refreshCertificate,
+            onOpenCertificate: _openCertificate,
+            onOpenEvidence: _openEvidenceFile,
           ),
         ],
       ],
@@ -480,7 +563,8 @@ class _CreditResultCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _DetailRow(label: 'Status', value: result.status),
-            _DetailRow(label: 'Jurisdiction', value: result.jurisdiction ?? 'N/A'),
+            _DetailRow(
+                label: 'Jurisdiction', value: result.jurisdiction ?? 'N/A'),
             _DetailRow(
               label: 'Registration',
               value: result.registrationNumber ?? 'N/A',
@@ -530,12 +614,16 @@ class _EvidenceResultCard extends StatelessWidget {
     required this.certificate,
     required this.isRefreshing,
     required this.onRefresh,
+    required this.onOpenCertificate,
+    required this.onOpenEvidence,
   });
 
   final EvidenceSubmissionResult submission;
   final CertificateStatusResult? certificate;
   final bool isRefreshing;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onOpenCertificate;
+  final Future<void> Function() onOpenEvidence;
 
   @override
   Widget build(BuildContext context) {
@@ -568,16 +656,35 @@ class _EvidenceResultCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
-            FilledButton.tonalIcon(
-              onPressed: isRefreshing ? null : onRefresh,
-              icon: isRefreshing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-              label: Text(isRefreshing ? 'Refreshing...' : 'Refresh Certificate'),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: isRefreshing ? null : onRefresh,
+                  icon: isRefreshing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text(
+                    isRefreshing ? 'Refreshing...' : 'Refresh Certificate',
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onOpenEvidence,
+                  icon: const Icon(Icons.download),
+                  label: const Text('Open Evidence File'),
+                ),
+                if (certificate?.certificateUrl != null)
+                  OutlinedButton.icon(
+                    onPressed: onOpenCertificate,
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Open Certificate'),
+                  ),
+              ],
             ),
           ],
         ),
@@ -688,7 +795,7 @@ class TradeGuardApi {
   static final instance = TradeGuardApi._();
   static const _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://wehom.net/v1',
+    defaultValue: 'https://wehom.net/v1',
   );
 
   Future<CreditLookupResult> lookupCredit({
@@ -720,7 +827,8 @@ class TradeGuardApi {
   Future<EvidenceSubmissionResult> uploadEvidence({
     required String companyName,
     required String filename,
-    required String textContent,
+    required String mimeType,
+    required Uint8List fileBytes,
     String? dealReference,
   }) async {
     final response = await http.post(
@@ -730,8 +838,8 @@ class TradeGuardApi {
         'company_name': companyName,
         'deal_reference': dealReference,
         'filename': filename,
-        'mime_type': 'text/plain',
-        'file_content_base64': base64Encode(utf8.encode(textContent)),
+        'mime_type': mimeType,
+        'file_content_base64': base64Encode(fileBytes),
       }),
     );
 
@@ -771,6 +879,10 @@ class TradeGuardApi {
     return CertificateStatusResult.fromJson(
       Map<String, dynamic>.from(json['data'] as Map),
     );
+  }
+
+  String evidenceFileUrl(String evidenceId) {
+    return '$_baseUrl/evidence/$evidenceId/file/download';
   }
 
   Map<String, dynamic> _decode(String body) {
@@ -887,4 +999,34 @@ class CertificateStatusResult {
       certificateUrl: json['certificate_url'] as String?,
     );
   }
+}
+
+class LocalEvidenceFile {
+  LocalEvidenceFile({
+    required this.filename,
+    required this.bytes,
+    required this.mimeType,
+  });
+
+  final String filename;
+  final Uint8List bytes;
+  final String mimeType;
+}
+
+String _mimeTypeFromFilename(String filename) {
+  final lower = filename.toLowerCase();
+
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.heic')) return 'image/heic';
+  if (lower.endsWith('.doc')) return 'application/msword';
+  if (lower.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (lower.endsWith('.json')) return 'application/json';
+  if (lower.endsWith('.csv')) return 'text/csv';
+  if (lower.endsWith('.txt')) return 'text/plain';
+
+  return 'application/octet-stream';
 }

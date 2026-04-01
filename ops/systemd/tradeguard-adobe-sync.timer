@@ -1,0 +1,11 @@
+[Unit]
+Description=Run TradeGuard Adobe Sign pending sync every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=tradeguard-adobe-sync.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

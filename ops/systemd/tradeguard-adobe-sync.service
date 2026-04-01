@@ -1,0 +1,8 @@
+[Unit]
+Description=TradeGuard Adobe Sign pending sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -X POST https://wehom.net/v1/evidence/providers/adobe-sign/sync-pending

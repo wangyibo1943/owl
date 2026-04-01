@@ -11,7 +11,7 @@ This document defines the MVP test cases for the current product focus:
 
 ## Test Environment
 
-- Backend base URL: `http://wehom.net/v1`
+- Backend base URL: `https://wehom.net/v1`
 - Database: Supabase production project
 - Workflow engine: n8n
 
@@ -184,4 +184,3 @@ This document defines the MVP test cases for the current product focus:
 - no blocking server crash remains
 - certificate retrieval and download are verified on the live server
 - known open gaps are documented before external demo
-

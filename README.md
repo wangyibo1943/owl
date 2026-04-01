@@ -36,10 +36,12 @@ Tariff risk is documented for Phase 2 and not included in the first engineering 
 
 - PRD, API contract, Sprint 1 tickets, and acceptance criteria are included
 - NestJS backend skeleton is included
-- Flutter mobile skeleton is included
+- Flutter mobile app is included and compiles locally for iOS simulator and Android debug
 - n8n workflow JSON drafts are included
 - Supabase schema draft is included
-- credit lookup service is wired for SEC EDGAR and California SOS provider routing
+- credit lookup service is wired for SEC EDGAR, GLEIF, and optional California SOS provider routing
+- evidence uploads are stored in Supabase Storage object storage
+- production HTTPS is enabled for `wehom.net` and `n8n.wehom.net`
 
 ## Recommended Sprint 1 Build Order
 
@@ -58,12 +60,13 @@ Create environment files from:
 ## Backend Status
 
 - `GET /v1/health` is implemented
-- `POST /v1/credit/lookup` now supports free SEC EDGAR lookups and optional California SOS lookups
-- credit lookup now returns `risk_score`, `match_confidence`, and website-aware SEC matching
+- `POST /v1/credit/lookup` now supports free SEC EDGAR lookups, GLEIF fallback, and optional California SOS lookups
+- credit lookup now returns `risk_score`, `match_confidence`, and website-aware SEC matching plus issuer metadata like `ticker` and `last_filing_date`
 - `POST /v1/evidence/upload` now persists evidence metadata and triggers n8n when configured
 - `GET /v1/evidence/:evidenceId/file/download` now downloads the originally uploaded evidence file
 - `GET /v1/evidence/:evidenceId/certificate` now returns stored certificate state when available
 - `GET /v1/evidence/:evidenceId/certificate/download` now downloads the stored notarization certificate as an attachment
+- `POST /v1/evidence/providers/adobe-sign/sync-pending` now supports batch Adobe Sign refreshes for server-side polling
 - `POST /v1/evidence/:evidenceId/anchor` now creates a first-pass blockchain anchor record after certificate completion
 - `GET /v1/evidence/:evidenceId/anchor` now returns stored anchor state when available
 - `POST /v1/legal/trigger` now creates a first-pass legal intake record after evidence notarization and anchoring
