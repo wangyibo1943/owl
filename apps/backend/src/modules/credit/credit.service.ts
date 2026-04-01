@@ -133,6 +133,8 @@ export class CreditService {
     companyState: string | null,
     website: string | null,
   ): Promise<NormalizedCompanyRecord | null> {
+    const websiteProvided = Boolean(website);
+
     if (companyState && companyState !== 'CA') {
       throw new BadRequestException({
         success: false,
@@ -148,20 +150,22 @@ export class CreditService {
 
     const secMatch = await this.lookupSecCompany(companyName, website);
     if (secMatch) {
-      if (secMatch.matchConfidence === 'HIGH' || Boolean(website)) {
+      if (this.shouldAcceptMatch(secMatch, websiteProvided)) {
         return secMatch;
       }
 
       const gleifMatch = await this.lookupGleifCompany(companyName);
-      if (!gleifMatch) {
-        return secMatch;
+      if (gleifMatch && this.shouldAcceptMatch(gleifMatch, websiteProvided)) {
+        return this.compareMatchPriority(gleifMatch, secMatch) > 0
+          ? gleifMatch
+          : secMatch;
       }
 
-      return gleifMatch.matchConfidence === 'HIGH' ? gleifMatch : secMatch;
+      return null;
     }
 
     const gleifMatch = await this.lookupGleifCompany(companyName);
-    if (gleifMatch) {
+    if (gleifMatch && this.shouldAcceptMatch(gleifMatch, websiteProvided)) {
       return gleifMatch;
     }
 
@@ -885,6 +889,10 @@ export class CreditService {
     const normalizedCandidate = this.normalizeCompanyName(candidate);
     const normalizedCandidateAlias = this.normalizeAliasName(candidate);
     const normalizedTargetAlias = this.normalizeAliasName(normalizedTarget);
+    const targetTokens = this.tokenizeName(normalizedTarget);
+    const candidateTokens = this.tokenizeName(normalizedCandidate);
+    const overlap = [...candidateTokens].filter((token) => targetTokens.has(token));
+    const shorterTokenCount = Math.min(targetTokens.size, candidateTokens.size);
 
     if (!normalizedCandidate) return 0;
     if (normalizedCandidate === normalizedTarget) return 100;
@@ -895,16 +903,24 @@ export class CreditService {
     ) {
       return 98;
     }
-    if (normalizedCandidate.startsWith(normalizedTarget)) return 90;
-    if (normalizedTarget.startsWith(normalizedCandidate)) return 85;
-    if (normalizedCandidate.includes(normalizedTarget)) return 80;
-    if (normalizedTarget.includes(normalizedCandidate)) return 75;
 
-    const targetTokens = this.tokenizeName(normalizedTarget);
-    const candidateTokens = [...this.tokenizeName(normalizedCandidate)];
-    const overlap = candidateTokens.filter((token) => targetTokens.has(token));
+    if (
+      shorterTokenCount >= 2 &&
+      normalizedCandidate.length >= 6 &&
+      normalizedTarget.length >= 6
+    ) {
+      if (normalizedCandidate.startsWith(normalizedTarget)) return 90;
+      if (normalizedTarget.startsWith(normalizedCandidate)) return 85;
+      if (normalizedCandidate.includes(normalizedTarget)) return 80;
+      if (normalizedTarget.includes(normalizedCandidate)) return 75;
+    }
 
-    if (targetTokens.size > 0 && overlap.length === targetTokens.size) {
+    if (
+      targetTokens.size > 0 &&
+      candidateTokens.size > 0 &&
+      overlap.length === targetTokens.size &&
+      targetTokens.size === candidateTokens.size
+    ) {
       return 92;
     }
 
@@ -921,6 +937,58 @@ export class CreditService {
     if (score >= 100) return 'HIGH';
     if (score >= 80) return 'MEDIUM';
     return 'LOW';
+  }
+
+  private shouldAcceptMatch(
+    company: NormalizedCompanyRecord,
+    websiteProvided: boolean,
+  ) {
+    if (company.matchConfidence === 'HIGH') {
+      return true;
+    }
+
+    if (
+      websiteProvided &&
+      company.sourceName === 'SEC EDGAR' &&
+      company.matchConfidence !== 'LOW' &&
+      (company.websiteMatch === 'VERIFIED' || company.websiteMatch === 'PROBABLE')
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private compareMatchPriority(
+    left: NormalizedCompanyRecord,
+    right: NormalizedCompanyRecord,
+  ) {
+    return this.matchPriority(left) - this.matchPriority(right);
+  }
+
+  private matchPriority(company: NormalizedCompanyRecord) {
+    const confidenceWeight =
+      company.matchConfidence === 'HIGH'
+        ? 300
+        : company.matchConfidence === 'MEDIUM'
+          ? 200
+          : 100;
+    const websiteWeight =
+      company.websiteMatch === 'VERIFIED'
+        ? 30
+        : company.websiteMatch === 'PROBABLE'
+          ? 20
+          : company.websiteMatch === 'UNKNOWN'
+            ? 10
+            : 0;
+    const sourceWeight =
+      company.sourceName === 'SEC EDGAR'
+        ? 30
+        : company.sourceName === 'California SOS'
+          ? 20
+          : 10;
+
+    return confidenceWeight + websiteWeight + sourceWeight;
   }
 
   private isCaliforniaInactive(statusDescription: unknown) {
