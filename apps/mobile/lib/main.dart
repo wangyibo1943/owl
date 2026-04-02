@@ -194,8 +194,8 @@ class AppCopy {
   String get requestFailed => isChinese ? '请求失败' : 'Request failed';
   String get companyNotFound => isChinese ? '未找到该公司' : 'Company was not found';
   String get unsupportedState => isChinese
-      ? '当前 MVP 仅支持加州私营公司州注册查询'
-      : 'Only California state registry lookup is supported for private companies in this MVP';
+      ? '当前 MVP 私营公司州注册查询支持加州、特拉华和德州'
+      : 'Private-company registry lookup currently supports California, Delaware, and Texas in this MVP';
   String get badRequest => isChinese ? '请求参数有误' : 'Bad Request';
   String get certificateReady => isChinese ? '证书已就绪' : 'Certificate ready';
   String get providerFollowUpNeeded =>
@@ -279,7 +279,7 @@ String _mapErrorMessage(BuildContext context, Object error) {
   if (message.contains('Company was not found')) return copy.companyNotFound;
   if (message.contains('UNSUPPORTED_STATE') ||
       message.contains(
-        'Only California state registry lookup is supported for private companies in this MVP',
+        'Private-company registry lookup currently supports California, Delaware, and Texas in this MVP',
       )) {
     return copy.unsupportedState;
   }

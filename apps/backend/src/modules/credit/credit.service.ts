@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { chromium } from 'playwright';
 import { CreditLookupDto } from './dto/credit-lookup.dto';
 import { SupabaseService } from '../database/supabase.service';
 
@@ -22,7 +23,12 @@ type NormalizedCompanyRecord = {
   website: string | null;
   websiteMatch: 'VERIFIED' | 'PROBABLE' | 'MISMATCH' | 'UNKNOWN';
   websiteProvided: boolean;
-  sourceName: 'California SOS' | 'SEC EDGAR' | 'GLEIF';
+  sourceName:
+    | 'California SOS'
+    | 'SEC EDGAR'
+    | 'GLEIF'
+    | 'Delaware Registry'
+    | 'Texas Comptroller';
   sourceUrl: string | null;
   agentName: string | null;
   agentAddress1: string | null;
@@ -112,6 +118,8 @@ export class CreditService {
         }>;
       }
     | null = null;
+
+  private readonly supportedPrivateRegistryStates = new Set(['CA', 'DE', 'TX']);
 
   async lookup(payload: CreditLookupDto) {
     const companyName = payload.company_name.trim();
@@ -485,17 +493,29 @@ export class CreditService {
   ): Promise<NormalizedCompanyRecord | null> {
     const websiteProvided = Boolean(website);
 
-    if (companyState && companyState !== 'CA') {
+    if (companyState && !this.supportedPrivateRegistryStates.has(companyState)) {
       throw new BadRequestException({
         success: false,
         error_code: 'UNSUPPORTED_STATE',
         message:
-          'Only California state registry lookup is supported for private companies in this MVP',
+          'Private-company registry lookup currently supports California, Delaware, and Texas in this MVP',
       });
     }
 
     if (companyState === 'CA') {
-      return this.lookupCaliforniaCompany(companyName);
+      if (process.env.CALIFORNIA_SOS_API_KEY) {
+        return this.lookupCaliforniaCompany(companyName);
+      }
+
+      return null;
+    }
+
+    if (companyState === 'DE') {
+      return this.lookupDelawareCompany(companyName);
+    }
+
+    if (companyState === 'TX') {
+      return this.lookupTexasCompany(companyName);
     }
 
     const secMatch = await this.lookupSecCompany(companyName, website);
@@ -519,11 +539,295 @@ export class CreditService {
       return gleifMatch;
     }
 
+    const registryMatches = (
+      await Promise.all([
+        this.lookupDelawareCompany(companyName),
+        this.lookupTexasCompany(companyName),
+        process.env.CALIFORNIA_SOS_API_KEY
+          ? this.lookupCaliforniaCompany(companyName)
+          : Promise.resolve(null),
+      ])
+    ).filter(
+      (entry): entry is NormalizedCompanyRecord => Boolean(entry),
+    );
+
+    if (registryMatches.length > 0) {
+      return registryMatches.sort(
+        (left, right) => this.compareMatchPriority(right, left),
+      )[0]!;
+    }
+
     if (process.env.CALIFORNIA_SOS_API_KEY) {
       return this.lookupCaliforniaCompany(companyName);
     }
 
     return null;
+  }
+
+  private async lookupDelawareCompany(
+    companyName: string,
+  ): Promise<NormalizedCompanyRecord | null> {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    try {
+      await page.goto(
+        'https://icis.corp.delaware.gov/Ecorp/EntitySearch/NameSearch.aspx',
+        { waitUntil: 'domcontentloaded', timeout: 90000 },
+      );
+      await page.fill('#ctl00_ContentPlaceHolder1_frmEntityName', companyName);
+      await page.click('#ctl00_ContentPlaceHolder1_btnSubmit');
+      await page.waitForTimeout(2500);
+
+      const linkTexts = await page
+        .locator('a')
+        .evaluateAll((nodes) =>
+          nodes
+            .map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
+            .filter(Boolean),
+        );
+
+      const candidate = this.pickBestScrapedLink(linkTexts, companyName);
+      if (!candidate) {
+        return null;
+      }
+
+      await page.click(`text=${candidate}`);
+      await page.waitForTimeout(2500);
+
+      const text = this.normalizeWhitespace(
+        (await page.textContent('body')) ?? '',
+      );
+
+      return this.mapDelawareEntity(text, companyName);
+    } catch {
+      return null;
+    } finally {
+      await page.close();
+      await browser.close();
+    }
+  }
+
+  private mapDelawareEntity(
+    pageText: string,
+    companyName: string,
+  ): NormalizedCompanyRecord | null {
+    const name = this.extractTextValue(pageText, 'Entity Name:', 'Entity Kind:');
+    const registrationNumber = this.extractTextValue(
+      pageText,
+      'File Number:',
+      'Incorporation Date / Formation Date:',
+    );
+    const incorporationDate = this.extractTextValue(
+      pageText,
+      'Incorporation Date / Formation Date:',
+      'Entity Name:',
+    )?.replace(/\(mm\/dd\/yyyy\)/i, '')
+      .trim();
+    const entityKind = this.extractTextValue(
+      pageText,
+      'Entity Kind:',
+      'Entity Type:',
+    );
+    const entityType = this.extractTextValue(
+      pageText,
+      'Entity Type:',
+      'Residency:',
+    );
+    const residency = this.extractTextValue(pageText, 'Residency:', 'State:');
+    const agentName = this.extractTextValue(pageText, 'Name:', 'Address:');
+    const agentAddress = this.extractTextValue(pageText, 'Address:', 'City:');
+    const agentCity = this.extractTextValue(pageText, 'City:', 'County:');
+    const agentState = 'DE';
+    const agentZipCode = this.extractTextValue(pageText, 'Postal Code:', 'Phone:');
+
+    if (!name || !registrationNumber) {
+      return null;
+    }
+
+    return {
+      name,
+      registrationNumber,
+      lei: null,
+      ticker: null,
+      entityType: [entityKind, entityType].filter(Boolean).join(' / ') || null,
+      jurisdiction: 'US-DE',
+      status: 'ACTIVE',
+      incorporationDate: this.normalizeDateString(incorporationDate ?? null),
+      lastFilingDate: null,
+      sicCode: null,
+      sicDescription: null,
+      website: null,
+      websiteMatch: 'UNKNOWN',
+      websiteProvided: false,
+      sourceName: 'Delaware Registry',
+      sourceUrl:
+        'https://icis.corp.delaware.gov/Ecorp/EntitySearch/NameSearch.aspx',
+      agentName,
+      agentAddress1: agentAddress,
+      agentAddress2: null,
+      agentCity,
+      agentState,
+      agentZipCode,
+      inactive: false,
+      branch: false,
+      supportsRegistryStatus: false,
+      supportsIncorporationDate: true,
+      matchConfidence: this.mapMatchConfidence(
+        this.scoreNameMatch(name, this.normalizeCompanyName(companyName)),
+      ),
+      rawPayload: {
+        source_text: pageText,
+      },
+    };
+  }
+
+  private async lookupTexasCompany(
+    companyName: string,
+  ): Promise<NormalizedCompanyRecord | null> {
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    try {
+      await page.goto(
+        'https://comptroller.texas.gov/taxes/franchise/account-status/search',
+        { waitUntil: 'domcontentloaded', timeout: 90000 },
+      );
+      await page.fill('#name', companyName);
+      await page.click('#submitBtn');
+      await page.waitForTimeout(2500);
+
+      const links = await page.locator('a').evaluateAll((nodes) =>
+        nodes
+          .map((node) => ({
+            text: (node.textContent ?? '').replace(/\s+/g, ' ').trim(),
+            href: (node as HTMLAnchorElement).href,
+          }))
+          .filter((entry) => entry.text.length > 0 && entry.href.includes('/search/')),
+      );
+
+      const candidate = this.pickBestScrapedLink(
+        links.map((entry) => entry.text),
+        companyName,
+      );
+      const match = links.find((entry) => entry.text === candidate);
+
+      if (!match?.href) {
+        return null;
+      }
+
+      await page.goto(match.href, {
+        waitUntil: 'domcontentloaded',
+        timeout: 90000,
+      });
+      await page.waitForTimeout(2500);
+
+      const text = this.normalizeWhitespace(
+        (await page.textContent('body')) ?? '',
+      );
+
+      return this.mapTexasEntity(text, match.text, companyName, match.href);
+    } catch {
+      return null;
+    } finally {
+      await page.close();
+      await browser.close();
+    }
+  }
+
+  private mapTexasEntity(
+    pageText: string,
+    matchedName: string,
+    companyName: string,
+    sourceUrl: string,
+  ): NormalizedCompanyRecord | null {
+    const registrationNumber = this.extractTextValue(
+      pageText,
+      'Taxpayer Number:',
+      'Mailing Address:',
+    );
+    const formationState = this.extractTextValue(
+      pageText,
+      'State of Formation:',
+      'SOS Registration Status',
+    );
+    const status = this.extractTextValue(
+      pageText,
+      'SOS Registration Status(SOS status updated each business day):',
+      'Effective SOS Registration Date:',
+    );
+    const incorporationDate = this.extractTextValue(
+      pageText,
+      'Effective SOS Registration Date:',
+      'Texas SOS File Number:',
+    );
+    const texasFileNumber = this.extractTextValue(
+      pageText,
+      'Texas SOS File Number:',
+      'Registered Agent Name:',
+    );
+    const agentName = this.extractTextValue(
+      pageText,
+      'Registered Agent Name:',
+      'Registered Office Street Address:',
+    );
+    const agentAddress = this.extractTextValue(
+      pageText,
+      'Registered Office Street Address:',
+      'Public Information Report',
+    );
+
+    if (!registrationNumber) {
+      return null;
+    }
+
+    return {
+      name: matchedName,
+      registrationNumber: texasFileNumber || registrationNumber,
+      lei: null,
+      ticker: null,
+      entityType: 'Texas Taxable Entity',
+      jurisdiction: this.normalizeUsJurisdiction(formationState) ?? 'US-TX',
+      status,
+      incorporationDate: this.normalizeDateString(incorporationDate ?? null),
+      lastFilingDate: null,
+      sicCode: null,
+      sicDescription: null,
+      website: null,
+      websiteMatch: 'UNKNOWN',
+      websiteProvided: false,
+      sourceName: 'Texas Comptroller',
+      sourceUrl,
+      agentName,
+      agentAddress1: agentAddress,
+      agentAddress2: null,
+      agentCity: null,
+      agentState: 'TX',
+      agentZipCode: null,
+      inactive: status ? !this.isActiveStatus(status.toLowerCase()) : false,
+      branch: formationState ? formationState.toUpperCase() !== 'TX' : false,
+      supportsRegistryStatus: true,
+      supportsIncorporationDate: true,
+      matchConfidence: this.mapMatchConfidence(
+        this.scoreNameMatch(matchedName, this.normalizeCompanyName(companyName)),
+      ),
+      rawPayload: {
+        source_text: pageText,
+        taxpayer_number: registrationNumber,
+      },
+    };
+  }
+
+  private pickBestScrapedLink(candidates: string[], companyName: string) {
+    const normalizedTarget = this.normalizeCompanyName(companyName);
+
+    return candidates
+      .map((candidate) => ({
+        candidate,
+        score: this.scoreNameMatch(candidate, normalizedTarget),
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score)[0]?.candidate;
   }
 
   private async lookupCaliforniaCompany(
@@ -1209,9 +1513,11 @@ export class CreditService {
 
   private describeProvider(companyState: string | null) {
     if (companyState === 'CA') return 'California SOS';
+    if (companyState === 'DE') return 'Delaware Registry';
+    if (companyState === 'TX') return 'Texas Comptroller';
     return process.env.CALIFORNIA_SOS_API_KEY
-      ? 'SEC EDGAR or California SOS'
-      : 'SEC EDGAR';
+      ? 'SEC EDGAR, GLEIF, Delaware Registry, Texas Comptroller, or California SOS'
+      : 'SEC EDGAR, GLEIF, Delaware Registry, or Texas Comptroller';
   }
 
   private secHeaders() {
@@ -1363,6 +1669,80 @@ export class CreditService {
     return jurisdiction.trim().toUpperCase().startsWith('US');
   }
 
+  private normalizeUsJurisdiction(value: string | null) {
+    if (!value) return null;
+
+    const normalized = value.trim().toUpperCase();
+    if (!normalized) return null;
+
+    const directCode = normalized.match(/\b([A-Z]{2})\b/);
+    if (directCode) {
+      return `US-${directCode[1]}`;
+    }
+
+    const stateMap: Record<string, string> = {
+      ALABAMA: 'AL',
+      ALASKA: 'AK',
+      ARIZONA: 'AZ',
+      ARKANSAS: 'AR',
+      CALIFORNIA: 'CA',
+      COLORADO: 'CO',
+      CONNECTICUT: 'CT',
+      DELAWARE: 'DE',
+      FLORIDA: 'FL',
+      GEORGIA: 'GA',
+      HAWAII: 'HI',
+      IDAHO: 'ID',
+      ILLINOIS: 'IL',
+      INDIANA: 'IN',
+      IOWA: 'IA',
+      KANSAS: 'KS',
+      KENTUCKY: 'KY',
+      LOUISIANA: 'LA',
+      MAINE: 'ME',
+      MARYLAND: 'MD',
+      MASSACHUSETTS: 'MA',
+      MICHIGAN: 'MI',
+      MINNESOTA: 'MN',
+      MISSISSIPPI: 'MS',
+      MISSOURI: 'MO',
+      MONTANA: 'MT',
+      NEBRASKA: 'NE',
+      NEVADA: 'NV',
+      'NEW HAMPSHIRE': 'NH',
+      'NEW JERSEY': 'NJ',
+      'NEW MEXICO': 'NM',
+      'NEW YORK': 'NY',
+      'NORTH CAROLINA': 'NC',
+      'NORTH DAKOTA': 'ND',
+      OHIO: 'OH',
+      OKLAHOMA: 'OK',
+      OREGON: 'OR',
+      PENNSYLVANIA: 'PA',
+      'RHODE ISLAND': 'RI',
+      'SOUTH CAROLINA': 'SC',
+      'SOUTH DAKOTA': 'SD',
+      TENNESSEE: 'TN',
+      TEXAS: 'TX',
+      UTAH: 'UT',
+      VERMONT: 'VT',
+      VIRGINIA: 'VA',
+      WASHINGTON: 'WA',
+      'WEST VIRGINIA': 'WV',
+      WISCONSIN: 'WI',
+      WYOMING: 'WY',
+      'DISTRICT OF COLUMBIA': 'DC',
+    };
+
+    for (const [stateName, stateCode] of Object.entries(stateMap)) {
+      if (normalized.includes(stateName)) {
+        return `US-${stateCode}`;
+      }
+    }
+
+    return null;
+  }
+
   private hasPoBoxAgentAddress(company: NormalizedCompanyRecord) {
     const agentAddress = [
       company.agentAddress1,
@@ -1403,6 +1783,40 @@ export class CreditService {
     } catch {
       return null;
     }
+  }
+
+  private normalizeWhitespace(value: string) {
+    return value.replace(/\s+/g, ' ').trim();
+  }
+
+  private extractTextValue(
+    text: string,
+    startLabel: string,
+    endLabel: string,
+  ) {
+    const startIndex = text.indexOf(startLabel);
+    if (startIndex < 0) return null;
+
+    const start = startIndex + startLabel.length;
+    const nextIndex = text.indexOf(endLabel, start);
+    const raw = (nextIndex >= 0 ? text.slice(start, nextIndex) : text.slice(start))
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return raw.length > 0 ? raw : null;
+  }
+
+  private normalizeDateString(value: string | null) {
+    if (!value) return null;
+
+    const cleaned = value.replace(/\(.*?\)/g, '').trim();
+    const parsed = new Date(cleaned);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return cleaned || null;
+    }
+
+    return parsed.toISOString().slice(0, 10);
   }
 
   private classifyWebsiteMatch(input: {
