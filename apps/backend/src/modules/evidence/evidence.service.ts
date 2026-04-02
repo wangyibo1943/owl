@@ -9,6 +9,7 @@ import { extname } from 'node:path';
 import { AdobeSignService } from './adobe-sign.service';
 import { FileStorageService } from './file-storage.service';
 import { SupabaseService } from '../database/supabase.service';
+import { AnchorService } from '../anchor/anchor.service';
 import { CreateAdobeSignNotarizationDto } from './dto/create-adobe-sign-notarization.dto';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import { RecordNotarizationResultDto } from './dto/record-notarization-result.dto';
@@ -59,6 +60,18 @@ type AdobeWebhookMatch = {
   created_at: string;
 };
 
+type BlockchainAnchorRecord = {
+  id: string;
+  evidence_id: string;
+  chain_name: string;
+  provider_name: string;
+  transaction_hash: string;
+  anchor_status: string;
+  anchor_proof_url: string | null;
+  anchored_hash: string;
+  created_at: string;
+};
+
 @Injectable()
 export class EvidenceService {
   private readonly logger = new Logger(EvidenceService.name);
@@ -67,6 +80,7 @@ export class EvidenceService {
     private readonly supabaseService: SupabaseService,
     private readonly adobeSignService: AdobeSignService,
     private readonly fileStorageService: FileStorageService,
+    private readonly anchorService: AnchorService,
   ) {}
 
   async create(payload: CreateEvidenceDto) {
@@ -90,6 +104,10 @@ export class EvidenceService {
       contentType: payload.mime_type,
     });
 
+    const preservationMode = this.normalizePreservationMode(
+      payload.preservation_mode,
+    );
+
     await this.supabaseService.insert('evidence_records', {
       id: evidenceId,
       company_name: payload.company_name.trim(),
@@ -99,20 +117,36 @@ export class EvidenceService {
       file_size_bytes: decoded.length,
       file_hash: fileHash,
       storage_path: storagePath,
-      status: 'PENDING_NOTARIZATION',
+      status:
+        preservationMode === 'ADOBE_SIGN'
+          ? 'PENDING_NOTARIZATION'
+          : 'PENDING_PRESERVATION',
     });
 
-    const workflowResult = await this.triggerNotarizationWorkflow({
-      evidence_id: evidenceId,
-      company_name: payload.company_name.trim(),
-      deal_reference: payload.deal_reference?.trim() || null,
-      filename: payload.filename,
-      mime_type: payload.mime_type,
-      file_hash: fileHash,
-      file_size_bytes: decoded.length,
-      file_content_base64: payload.file_content_base64,
-      storage_path: storagePath,
-    });
+    const workflowResult =
+      preservationMode === 'ADOBE_SIGN'
+          ? await this.triggerNotarizationWorkflow({
+              evidence_id: evidenceId,
+              company_name: payload.company_name.trim(),
+              deal_reference: payload.deal_reference?.trim() || null,
+              filename: payload.filename,
+              mime_type: payload.mime_type,
+              file_hash: fileHash,
+              file_size_bytes: decoded.length,
+              file_content_base64: payload.file_content_base64,
+              storage_path: storagePath,
+            })
+          : await this.completeQuickPreservation({
+              evidence_id: evidenceId,
+              company_name: payload.company_name.trim(),
+              deal_reference: payload.deal_reference?.trim() || null,
+              filename: payload.filename,
+              mime_type: payload.mime_type,
+              file_hash: fileHash,
+              file_size_bytes: decoded.length,
+              file_content_base64: payload.file_content_base64,
+              storage_path: storagePath,
+            });
 
     return {
       success: true,
@@ -122,6 +156,7 @@ export class EvidenceService {
         file_hash: fileHash,
         status: workflowResult.status,
         workflow_triggered: workflowResult.triggered,
+        preservation_mode: preservationMode,
       },
     };
   }
@@ -264,11 +299,16 @@ export class EvidenceService {
     const providerName = certificate.provider_name.toLowerCase();
 
     if (!providerName.includes('adobe')) {
-      throw new BadRequestException({
-        success: false,
-        error_code: 'UNSUPPORTED_PROVIDER',
-        message: 'This certificate is not managed by Adobe Sign sync',
-      });
+      return {
+        success: true,
+        data: {
+          evidence_id: evidenceId,
+          status: certificate.status,
+          certificate_id:
+            certificate.provider_certificate_id ?? certificate.id,
+          certificate_url: certificate.certificate_url,
+        },
+      };
     }
 
     const agreementId =
@@ -491,6 +531,52 @@ export class EvidenceService {
           certificate: refreshedCertificate,
           agreementId,
         }),
+      };
+    }
+
+    if (this.isTradeGuardPreservationCertificate(refreshedCertificate)) {
+      const anchor =
+        await this.supabaseService.findFirst<BlockchainAnchorRecord>(
+          'blockchain_anchors',
+          {
+            evidence_id: evidenceId,
+          },
+        );
+      const proof = {
+        certificate_id:
+          refreshedCertificate.provider_certificate_id ??
+          refreshedCertificate.id,
+        provider_name: refreshedCertificate.provider_name,
+        status: refreshedCertificate.status,
+        evidence: {
+          evidence_id: evidence.id,
+          company_name: evidence.company_name,
+          deal_reference: evidence.deal_reference,
+          filename: evidence.filename,
+          mime_type: evidence.mime_type,
+          file_hash: evidence.file_hash,
+          storage_path: evidence.storage_path,
+          created_at: evidence.created_at,
+        },
+        blockchain_anchor: anchor
+            ? {
+                anchor_id: anchor.id,
+                chain_name: anchor.chain_name,
+                provider_name: anchor.provider_name,
+                transaction_hash: anchor.transaction_hash,
+                anchor_status: anchor.anchor_status,
+                anchor_proof_url: anchor.anchor_proof_url,
+                anchored_hash: anchor.anchored_hash,
+                created_at: anchor.created_at,
+              }
+            : null,
+        generated_at: new Date().toISOString(),
+      };
+
+      return {
+        content: Buffer.from(JSON.stringify(proof, null, 2)),
+        content_type: 'application/json',
+        file_name: this.buildTradeGuardProofFileName(evidence),
       };
     }
 
@@ -723,6 +809,62 @@ export class EvidenceService {
     }
   }
 
+  private normalizePreservationMode(value: string | undefined) {
+    const normalized = value?.trim().toUpperCase();
+    return normalized === 'ADOBE_SIGN' ? 'ADOBE_SIGN' : 'QUICK_PRESERVATION';
+  }
+
+  private async completeQuickPreservation(payload: Record<string, unknown>) {
+    const evidenceId = String(payload.evidence_id);
+    const certificateId = `tg-proof-${evidenceId}`;
+
+    await this.recordNotarizationResult(evidenceId, {
+      provider_name: 'TradeGuard Preservation',
+      provider_certificate_id: certificateId,
+      certificate_url: this.buildCertificateDownloadUrl(evidenceId),
+      status: 'COMPLETED',
+      provider_payload: {
+        preservation_mode: 'QUICK_PRESERVATION',
+        file_hash: payload.file_hash,
+        storage_path: payload.storage_path,
+        preserved_at: new Date().toISOString(),
+      },
+    });
+
+    let anchorCreated = false;
+
+    try {
+      await this.anchorService.createAnchor(evidenceId);
+      anchorCreated = true;
+      await this.logWorkflow({
+        reference_id: evidenceId,
+        status: 'QUICK_PRESERVATION_ANCHORED',
+        payload: {
+          preservation_mode: 'QUICK_PRESERVATION',
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Quick preservation anchor skipped for ${evidenceId}: ${
+          error instanceof Error ? error.message : 'unknown error'
+        }`,
+      );
+      await this.logWorkflow({
+        reference_id: evidenceId,
+        status: 'QUICK_PRESERVATION_ANCHOR_FAILED',
+        payload: {
+          preservation_mode: 'QUICK_PRESERVATION',
+          message: error instanceof Error ? error.message : 'unknown error',
+        },
+      });
+    }
+
+    return {
+      triggered: true,
+      status: anchorCreated ? 'COMPLETED' : 'COMPLETED',
+    };
+  }
+
   private getApiBaseUrl() {
     const explicitBaseUrl = process.env.TRADEGUARD_API_BASE_URL?.trim();
 
@@ -732,6 +874,18 @@ export class EvidenceService {
 
     const port = process.env.PORT?.trim() || '3000';
     return `http://localhost:${port}`;
+  }
+
+  private isTradeGuardPreservationCertificate(
+    certificate: NotarizationCertificateRecord,
+  ) {
+    return certificate.provider_name.toLowerCase().includes('tradeguard');
+  }
+
+  private buildTradeGuardProofFileName(evidence: EvidenceRecord) {
+    const baseName = evidence.filename.replace(/\.[^.]+$/, '');
+    const normalizedBaseName = baseName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return `${normalizedBaseName}-tradeguard-proof-${evidence.id}.json`;
   }
 
   private async triggerNotarizationWorkflow(

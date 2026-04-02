@@ -20,4 +20,8 @@ export class CreateEvidenceDto {
   @IsOptional()
   @IsString()
   deal_reference!: string;
+
+  @IsOptional()
+  @IsString()
+  preservation_mode?: string;
 }

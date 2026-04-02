@@ -7,5 +7,6 @@ import { AnchorService } from './anchor.service';
   imports: [DatabaseModule],
   controllers: [AnchorController],
   providers: [AnchorService],
+  exports: [AnchorService],
 })
 export class AnchorModule {}

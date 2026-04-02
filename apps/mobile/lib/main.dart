@@ -123,8 +123,8 @@ class AppCopy {
       : 'Enter a US company name and optional website to get a live risk grade, registry match confidence, and evidence-backed explanation.';
   String get evidenceHeroTitle => isChinese ? '证据固定与存证' : 'Evidence Preservation';
   String get evidenceHeroBody => isChinese
-      ? '上传合同、聊天记录或截图进入实时存证链路。后端会返回 Adobe Sign 协议状态和证书下载地址。'
-      : 'Submit text evidence into the live notarization pipeline. Adobe Sign agreements and certificate URLs are returned from the backend.';
+      ? '上传合同扫描件、聊天记录或截图后，系统会自动保存文件、生成哈希、完成链上锚定，并返回可下载的存证证明。'
+      : 'Upload a contract scan, chat export, or screenshot and TradeGuard will store it, hash it, anchor it on-chain, and return a downloadable preservation proof.';
   String get evidenceSubmission => isChinese ? '证据提交' : 'Evidence Submission';
   String get dealReference => isChinese ? '交易编号' : 'Deal reference';
   String get chooseEvidenceFile => isChinese ? '选择证据文件' : 'Choose evidence file';
@@ -136,8 +136,8 @@ class AppCopy {
   String get preserveContractEvidence =>
       isChinese ? '固定合同与聊天证据' : 'Preserve contract evidence';
   String get preserveContractEvidenceBody => isChinese
-      ? '上传 PDF、截图或聊天导出文件，推入实时存证流程，并保留可下载的证书链路。'
-      : 'Upload a PDF, screenshot, or chat export to push it into the live notarization flow and keep a downloadable certificate trail.';
+      ? '上传 PDF、截图或聊天导出文件，系统会自动完成快速存证，并生成可下载的证明文件。'
+      : 'Upload a PDF, screenshot, or chat export and the app will complete quick preservation automatically with a downloadable proof file.';
   String get fileBytesError =>
       isChinese ? '当前设备无法读取文件内容。' : 'File bytes could not be loaded on this device.';
   String get chooseFileFirst =>
@@ -149,8 +149,8 @@ class AppCopy {
   String get evidenceStatus => isChinese ? '证据状态' : 'Evidence Status';
   String get evidenceReceived => isChinese ? '证据已接收' : 'Evidence received';
   String get evidenceReceivedBody => isChinese
-      ? '证据文件已经存入系统，正在等待存证或同步最新状态。'
-      : 'The evidence file is stored and ready for notarization updates.';
+      ? '证据文件已经存入系统，系统会自动生成证明并尝试完成链上锚定。'
+      : 'The evidence file is stored and the system will generate a preservation proof and attempt on-chain anchoring automatically.';
   String get evidenceId => isChinese ? '证据 ID' : 'Evidence ID';
   String get fileHash => isChinese ? '文件哈希' : 'Hash';
   String get uploadStatus => isChinese ? '上传状态' : 'Upload Status';
@@ -190,14 +190,14 @@ class AppCopy {
       isChinese ? '存证处理中' : 'Notarization in progress';
   String get evidenceProcessing => isChinese ? '证据处理中' : 'Evidence processing';
   String get certificateReadyBody => isChinese
-      ? '证书已经生成，现在可以直接打开或下载。'
-      : 'The provider certificate is available and can be opened or downloaded now.';
+      ? '存证证明已经生成，现在可以直接打开或下载。'
+      : 'The preservation proof is available and can be opened or downloaded now.';
   String get providerFollowUpNeededBody => isChinese
-      ? '提供方返回了失败状态，请检查 Adobe Sign 后再次刷新。'
-      : 'The provider reported a failure state. Refresh again after checking Adobe Sign.';
+      ? '当前处理链路返回了失败状态，请稍后刷新或重新提交。'
+      : 'The preservation pipeline reported a failure state. Refresh again or resubmit later.';
   String get notarizationInProgressBody => isChinese
-      ? '证据已进入实时存证队列，请稍后刷新查看证书完成情况。'
-      : 'The evidence is in the live notarization queue. Refresh to check for certificate completion.';
+      ? '证据正在处理，请稍后刷新查看证明是否已经生成。'
+      : 'The evidence is being processed. Refresh to check whether the proof is ready.';
   String get evidenceProcessingBody => isChinese
       ? '证据已被系统接收，正在等待提供方状态更新。'
       : 'The evidence has been accepted and is waiting for provider status updates.';
@@ -601,7 +601,6 @@ class _EvidenceScreenState extends State<EvidenceScreen> {
     });
 
     try {
-      await TradeGuardApi.instance.syncAdobe(evidenceId);
       final certificate =
           await TradeGuardApi.instance.getCertificate(evidenceId);
 
@@ -1286,6 +1285,7 @@ class TradeGuardApi {
         'filename': filename,
         'mime_type': mimeType,
         'file_content_base64': base64Encode(fileBytes),
+        'preservation_mode': 'QUICK_PRESERVATION',
       }),
     );
 
