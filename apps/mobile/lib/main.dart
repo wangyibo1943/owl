@@ -168,6 +168,19 @@ class AppCopy {
   String get score => isChinese ? '评分' : 'Score';
   String get confidence => isChinese ? '置信度' : 'Confidence';
   String get source => isChinese ? '来源' : 'Source';
+  String get identityCheck => isChinese ? '主体核验' : 'Identity Check';
+  String get sanctionsCheck => isChinese ? '制裁筛查' : 'Sanctions Check';
+  String get litigationCheck => isChinese ? '司法风险' : 'Litigation Check';
+  String get screeningStatus => isChinese ? '筛查状态' : 'Screening Status';
+  String get caseCount => isChinese ? '案件数' : 'Case Count';
+  String get recentCases => isChinese ? '近三年案件' : 'Recent Cases';
+  String get potentialMatches => isChinese ? '潜在命中' : 'Potential Matches';
+  String get verified => isChinese ? '已核验' : 'Verified';
+  String get reviewRequired => isChinese ? '需要复核' : 'Review Required';
+  String get clear => isChinese ? '未见异常' : 'Clear';
+  String get matched => isChinese ? '疑似命中' : 'Matched';
+  String get elevated => isChinese ? '偏高' : 'Elevated';
+  String get high => isChinese ? '较高' : 'High';
   String get websiteMatch => isChinese ? '官网匹配' : 'Website';
   String get ticker => isChinese ? '股票代码' : 'Ticker';
   String get status => isChinese ? '状态' : 'Status';
@@ -238,10 +251,25 @@ class AppCopy {
       'MISSING_INCORPORATION_DATE': '缺少成立时间',
       'STALE_PUBLIC_FILINGS': '公开披露记录过旧',
       'AGING_PUBLIC_FILINGS': '公开披露记录偏旧',
+      'OFAC_POTENTIAL_MATCH': '疑似 OFAC 命中',
+      'OFAC_NAME_SCREENING_REVIEW': 'OFAC 名称需要复核',
+      'HIGH_LITIGATION_ACTIVITY': '司法纠纷较多',
+      'ELEVATED_LITIGATION_ACTIVITY': '存在一定司法纠纷',
+      'RECENT_LITIGATION_ACTIVITY': '近三年存在司法纠纷',
     };
 
     return isChinese ? (zh[flag] ?? flag) : flag;
   }
+
+  String screeningStatusLabel(String value) => switch (value) {
+        'VERIFIED' => verified,
+        'REVIEW_REQUIRED' => reviewRequired,
+        'CLEAR' => clear,
+        'MATCHED' => matched,
+        'ELEVATED' => elevated,
+        'HIGH' => high,
+        _ => value,
+      };
 }
 
 String _mapErrorMessage(BuildContext context, Object error) {
@@ -855,6 +883,94 @@ class _CreditResultCard extends StatelessWidget {
               body: result.summary,
             ),
             const SizedBox(height: 16),
+            _CheckSectionCard(
+              title: copy.identityCheck,
+              tone: result.identityCheck.tone,
+              summary: result.identityCheck.summary,
+              metrics: [
+                _SectionMetric(
+                  copy.screeningStatus,
+                  copy.screeningStatusLabel(result.identityCheck.status),
+                ),
+                _SectionMetric(copy.source, result.identityCheck.sourceName),
+                _SectionMetric(
+                  copy.confidence,
+                  result.identityCheck.matchConfidence,
+                ),
+                _SectionMetric(
+                  copy.websiteMatch,
+                  copy.websiteMatchLabel(result.identityCheck.websiteMatch),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _CheckSectionCard(
+              title: copy.sanctionsCheck,
+              tone: result.sanctionsCheck.tone,
+              summary: result.sanctionsCheck.summary,
+              metrics: [
+                _SectionMetric(
+                  copy.screeningStatus,
+                  copy.screeningStatusLabel(result.sanctionsCheck.status),
+                ),
+                _SectionMetric(
+                  copy.potentialMatches,
+                  '${result.sanctionsCheck.matchCount}',
+                ),
+                _SectionMetric(copy.source, result.sanctionsCheck.sourceName),
+              ],
+              extra: result.sanctionsCheck.topMatches.isEmpty
+                  ? null
+                  : Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: result.sanctionsCheck.topMatches
+                          .map(
+                            (item) => Chip(
+                              label: Text(item.name),
+                              backgroundColor: const Color(0xFFF5F7F4),
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            const SizedBox(height: 14),
+            _CheckSectionCard(
+              title: copy.litigationCheck,
+              tone: result.litigationCheck.tone,
+              summary: result.litigationCheck.summary,
+              metrics: [
+                _SectionMetric(
+                  copy.screeningStatus,
+                  copy.screeningStatusLabel(result.litigationCheck.status),
+                ),
+                _SectionMetric(
+                  copy.caseCount,
+                  '${result.litigationCheck.caseCount}',
+                ),
+                _SectionMetric(
+                  copy.recentCases,
+                  '${result.litigationCheck.recentCaseCount}',
+                ),
+                _SectionMetric(copy.source, result.litigationCheck.sourceName),
+              ],
+              extra: result.litigationCheck.topCases.isEmpty
+                  ? null
+                  : Column(
+                      children: result.litigationCheck.topCases
+                          .map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _DetailRow(
+                                label: item.filedAt ?? copy.notAvailable,
+                                value: item.caseName,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            const SizedBox(height: 16),
             _DetailRow(label: copy.status, value: result.status),
             _DetailRow(
               label: copy.jurisdiction,
@@ -900,6 +1016,64 @@ class _CreditResultCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CheckSectionCard extends StatelessWidget {
+  const _CheckSectionCard({
+    required this.title,
+    required this.tone,
+    required this.summary,
+    required this.metrics,
+    this.extra,
+  });
+
+  final String title;
+  final StatusTone tone;
+  final String summary;
+  final List<_SectionMetric> metrics;
+  final Widget? extra;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFA),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD8E6E3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          _StatusBanner(tone: tone, title: title, body: summary),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: metrics
+                .map((metric) => _MetricChip(label: metric.label, value: metric.value))
+                .toList(),
+          ),
+          if (extra != null) ...[
+            const SizedBox(height: 12),
+            extra!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionMetric {
+  const _SectionMetric(this.label, this.value);
+
+  final String label;
+  final String value;
 }
 
 class _EvidenceResultCard extends StatelessWidget {
@@ -1360,6 +1534,9 @@ class CreditLookupResult {
     required this.status,
     required this.summary,
     required this.websiteMatch,
+    required this.identityCheck,
+    required this.sanctionsCheck,
+    required this.litigationCheck,
     this.ticker,
     this.entityType,
     this.jurisdiction,
@@ -1381,6 +1558,9 @@ class CreditLookupResult {
   final String status;
   final String summary;
   final String websiteMatch;
+  final IdentityCheckResult identityCheck;
+  final SanctionsCheckResult sanctionsCheck;
+  final LitigationCheckResult litigationCheck;
   final String? lastFilingDate;
   final String? sicDescription;
 
@@ -1401,6 +1581,21 @@ class CreditLookupResult {
       status: json['status'] as String? ?? 'Unknown',
       summary: json['summary'] as String? ?? '',
       websiteMatch: json['website_match'] as String? ?? 'UNKNOWN',
+      identityCheck: IdentityCheckResult.fromJson(
+        Map<String, dynamic>.from(
+          (json['identity_check'] as Map?) ?? const <String, dynamic>{},
+        ),
+      ),
+      sanctionsCheck: SanctionsCheckResult.fromJson(
+        Map<String, dynamic>.from(
+          (json['sanctions_check'] as Map?) ?? const <String, dynamic>{},
+        ),
+      ),
+      litigationCheck: LitigationCheckResult.fromJson(
+        Map<String, dynamic>.from(
+          (json['litigation_check'] as Map?) ?? const <String, dynamic>{},
+        ),
+      ),
       lastFilingDate: json['last_filing_date'] as String?,
       sicDescription: json['sic_description'] as String?,
     );
@@ -1437,6 +1632,175 @@ class CreditLookupResult {
 
   String riskToneTitle(BuildContext context) =>
       context.copy.gradeRiskTitle(creditGrade);
+}
+
+class IdentityCheckResult {
+  IdentityCheckResult({
+    required this.status,
+    required this.sourceName,
+    required this.matchConfidence,
+    required this.websiteMatch,
+    required this.summary,
+  });
+
+  final String status;
+  final String sourceName;
+  final String matchConfidence;
+  final String websiteMatch;
+  final String summary;
+
+  factory IdentityCheckResult.fromJson(Map<String, dynamic> json) {
+    return IdentityCheckResult(
+      status: json['status'] as String? ?? 'REVIEW_REQUIRED',
+      sourceName: json['source_name'] as String? ?? 'Unknown',
+      matchConfidence: json['match_confidence'] as String? ?? 'UNKNOWN',
+      websiteMatch: json['website_match'] as String? ?? 'UNKNOWN',
+      summary: json['summary'] as String? ?? '',
+    );
+  }
+
+  StatusTone get tone => status == 'VERIFIED'
+      ? const StatusTone(
+          background: Color(0xFFE6F6EC),
+          foreground: Color(0xFF14532D),
+        )
+      : const StatusTone(
+          background: Color(0xFFFFF4DB),
+          foreground: Color(0xFFB45309),
+        );
+}
+
+class SanctionsCheckResult {
+  SanctionsCheckResult({
+    required this.status,
+    required this.sourceName,
+    required this.matchCount,
+    required this.summary,
+    required this.topMatches,
+  });
+
+  final String status;
+  final String sourceName;
+  final int matchCount;
+  final String summary;
+  final List<SanctionsMatchResult> topMatches;
+
+  factory SanctionsCheckResult.fromJson(Map<String, dynamic> json) {
+    return SanctionsCheckResult(
+      status: json['status'] as String? ?? 'CLEAR',
+      sourceName: json['source_name'] as String? ?? 'OFAC SDN',
+      matchCount: (json['match_count'] as num?)?.toInt() ?? 0,
+      summary: json['summary'] as String? ?? '',
+      topMatches: (json['top_matches'] as List<dynamic>? ?? const [])
+          .map((item) => SanctionsMatchResult.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList(),
+    );
+  }
+
+  StatusTone get tone {
+    switch (status) {
+      case 'MATCHED':
+        return const StatusTone(
+          background: Color(0xFFFDEAEA),
+          foreground: Color(0xFF991B1B),
+        );
+      case 'REVIEW_REQUIRED':
+        return const StatusTone(
+          background: Color(0xFFFFF4DB),
+          foreground: Color(0xFFB45309),
+        );
+      default:
+        return const StatusTone(
+          background: Color(0xFFE6F6EC),
+          foreground: Color(0xFF14532D),
+        );
+    }
+  }
+}
+
+class SanctionsMatchResult {
+  SanctionsMatchResult({
+    required this.name,
+    required this.score,
+  });
+
+  final String name;
+  final int score;
+
+  factory SanctionsMatchResult.fromJson(Map<String, dynamic> json) {
+    return SanctionsMatchResult(
+      name: json['name'] as String? ?? 'Unknown',
+      score: (json['score'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class LitigationCheckResult {
+  LitigationCheckResult({
+    required this.status,
+    required this.sourceName,
+    required this.caseCount,
+    required this.recentCaseCount,
+    required this.summary,
+    required this.topCases,
+  });
+
+  final String status;
+  final String sourceName;
+  final int caseCount;
+  final int recentCaseCount;
+  final String summary;
+  final List<LitigationCaseResult> topCases;
+
+  factory LitigationCheckResult.fromJson(Map<String, dynamic> json) {
+    return LitigationCheckResult(
+      status: json['status'] as String? ?? 'CLEAR',
+      sourceName: json['source_name'] as String? ?? 'CourtListener',
+      caseCount: (json['case_count'] as num?)?.toInt() ?? 0,
+      recentCaseCount: (json['recent_case_count'] as num?)?.toInt() ?? 0,
+      summary: json['summary'] as String? ?? '',
+      topCases: (json['top_cases'] as List<dynamic>? ?? const [])
+          .map((item) => LitigationCaseResult.fromJson(Map<String, dynamic>.from(item as Map)))
+          .toList(),
+    );
+  }
+
+  StatusTone get tone {
+    switch (status) {
+      case 'HIGH':
+        return const StatusTone(
+          background: Color(0xFFFDEAEA),
+          foreground: Color(0xFF991B1B),
+        );
+      case 'ELEVATED':
+        return const StatusTone(
+          background: Color(0xFFFFF4DB),
+          foreground: Color(0xFFB45309),
+        );
+      default:
+        return const StatusTone(
+          background: Color(0xFFE6F6EC),
+          foreground: Color(0xFF14532D),
+        );
+    }
+  }
+}
+
+class LitigationCaseResult {
+  LitigationCaseResult({
+    required this.caseName,
+    required this.filedAt,
+  });
+
+  final String caseName;
+  final String? filedAt;
+
+  factory LitigationCaseResult.fromJson(Map<String, dynamic> json) {
+    return LitigationCaseResult(
+      caseName: json['case_name'] as String? ?? 'Unknown',
+      filedAt: json['filed_at'] as String?,
+    );
+  }
 }
 
 class EvidenceSubmissionResult {

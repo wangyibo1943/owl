@@ -45,6 +45,50 @@ type RiskEvaluation = {
   summary: string;
 };
 
+type IdentityCheck = {
+  status: 'VERIFIED' | 'REVIEW_REQUIRED';
+  source_name: string;
+  source_url: string | null;
+  match_confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  website_match: 'VERIFIED' | 'PROBABLE' | 'MISMATCH' | 'UNKNOWN';
+  risk_flags: string[];
+  summary: string;
+};
+
+type SanctionsMatch = {
+  name: string;
+  programs: string | null;
+  remarks: string | null;
+  score: number;
+};
+
+type SanctionsCheck = {
+  status: 'CLEAR' | 'REVIEW_REQUIRED' | 'MATCHED';
+  source_name: 'OFAC SDN';
+  source_url: string;
+  match_count: number;
+  top_matches: SanctionsMatch[];
+  summary: string;
+};
+
+type LitigationCase = {
+  case_name: string;
+  filed_at: string | null;
+  court: string | null;
+  docket_url: string | null;
+  score: number;
+};
+
+type LitigationCheck = {
+  status: 'CLEAR' | 'ELEVATED' | 'HIGH';
+  source_name: 'CourtListener';
+  source_url: string;
+  case_count: number;
+  recent_case_count: number;
+  top_cases: LitigationCase[];
+  summary: string;
+};
+
 @Injectable()
 export class CreditService {
   constructor(private readonly supabaseService: SupabaseService) {}
@@ -57,6 +101,17 @@ export class CreditService {
 
   private readonly secTickersUrl =
     process.env.SEC_TICKERS_URL ?? 'https://www.sec.gov/files/company_tickers.json';
+
+  private sanctionsCache:
+    | {
+        fetchedAt: number;
+        records: Array<{
+          name: string;
+          programs: string | null;
+          remarks: string | null;
+        }>;
+      }
+    | null = null;
 
   async lookup(payload: CreditLookupDto) {
     const companyName = payload.company_name.trim();
@@ -86,7 +141,19 @@ export class CreditService {
       });
     }
 
-    const evaluation = this.evaluateRisk(company);
+    const identityEvaluation = this.evaluateRisk(company);
+    const identityCheck = this.buildIdentityCheck(company, identityEvaluation);
+    const [sanctionsCheck, litigationCheck] = await Promise.all([
+      this.runSanctionsCheck(company.name),
+      this.runLitigationCheck(company.name),
+    ]);
+    const aggregateEvaluation = this.buildAggregateEvaluation({
+      company,
+      identityEvaluation,
+      sanctionsCheck,
+      litigationCheck,
+    });
+
     const responsePayload = {
       company_name: company.name,
       lei: company.lei,
@@ -101,13 +168,18 @@ export class CreditService {
       sic_description: company.sicDescription,
       website: company.website,
       website_match: company.websiteMatch,
-      credit_grade: evaluation.creditGrade,
-      risk_score: evaluation.riskScore,
-      risk_flags: evaluation.riskFlags,
+      credit_grade: aggregateEvaluation.creditGrade,
+      risk_score: aggregateEvaluation.riskScore,
+      risk_flags: aggregateEvaluation.riskFlags,
       match_confidence: company.matchConfidence,
-      summary: evaluation.summary,
+      summary: aggregateEvaluation.summary,
       source_name: company.sourceName,
       source_url: company.sourceUrl,
+      overall_grade: aggregateEvaluation.creditGrade,
+      overall_risk_score: aggregateEvaluation.riskScore,
+      identity_check: identityCheck,
+      sanctions_check: sanctionsCheck,
+      litigation_check: litigationCheck,
     };
 
     await this.logLookup({
@@ -119,13 +191,288 @@ export class CreditService {
       risk_flags: responsePayload.risk_flags,
       source_name: responsePayload.source_name,
       source_url: responsePayload.source_url,
-      raw_payload: company.rawPayload,
+      raw_payload: {
+        identity_source: company.rawPayload,
+        identity_check: identityCheck,
+        sanctions_check: sanctionsCheck,
+        litigation_check: litigationCheck,
+      },
     });
 
     return {
       success: true,
       data: responsePayload,
     };
+  }
+
+  private buildIdentityCheck(
+    company: NormalizedCompanyRecord,
+    evaluation: RiskEvaluation,
+  ): IdentityCheck {
+    return {
+      status:
+        company.matchConfidence === 'LOW' ? 'REVIEW_REQUIRED' : 'VERIFIED',
+      source_name: company.sourceName,
+      source_url: company.sourceUrl,
+      match_confidence: company.matchConfidence,
+      website_match: company.websiteMatch,
+      risk_flags: evaluation.riskFlags,
+      summary: evaluation.summary,
+    };
+  }
+
+  private buildAggregateEvaluation(input: {
+    company: NormalizedCompanyRecord;
+    identityEvaluation: RiskEvaluation;
+    sanctionsCheck: SanctionsCheck;
+    litigationCheck: LitigationCheck;
+  }): RiskEvaluation {
+    let score = input.identityEvaluation.riskScore;
+    const riskFlags = [...input.identityEvaluation.riskFlags];
+
+    if (input.sanctionsCheck.status === 'MATCHED') {
+      score -= 60;
+      riskFlags.push('OFAC_POTENTIAL_MATCH');
+    } else if (input.sanctionsCheck.status === 'REVIEW_REQUIRED') {
+      score -= 20;
+      riskFlags.push('OFAC_NAME_SCREENING_REVIEW');
+    }
+
+    if (input.litigationCheck.status === 'HIGH') {
+      score -= 20;
+      riskFlags.push('HIGH_LITIGATION_ACTIVITY');
+    } else if (input.litigationCheck.status === 'ELEVATED') {
+      score -= 10;
+      riskFlags.push('ELEVATED_LITIGATION_ACTIVITY');
+    }
+
+    if (input.litigationCheck.recent_case_count > 0) {
+      riskFlags.push('RECENT_LITIGATION_ACTIVITY');
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    const creditGrade = this.mapScoreToGrade(score);
+    const summary = this.buildAggregateSummary({
+      company: input.company,
+      creditGrade,
+      sanctionsCheck: input.sanctionsCheck,
+      litigationCheck: input.litigationCheck,
+      riskFlags,
+    });
+
+    return {
+      creditGrade,
+      riskScore: score,
+      riskFlags: [...new Set(riskFlags)],
+      summary,
+    };
+  }
+
+  private buildAggregateSummary(input: {
+    company: NormalizedCompanyRecord;
+    creditGrade: 'A' | 'B' | 'C' | 'D';
+    sanctionsCheck: SanctionsCheck;
+    litigationCheck: LitigationCheck;
+    riskFlags: string[];
+  }) {
+    return `Entity grade is ${input.creditGrade}. Identity source is ${input.company.sourceName}. Sanctions screen is ${input.sanctionsCheck.status.toLowerCase()} with ${input.sanctionsCheck.match_count} potential matches. Litigation screen is ${input.litigationCheck.status.toLowerCase()} with ${input.litigationCheck.case_count} relevant public cases and ${input.litigationCheck.recent_case_count} recent cases. Current flags: ${input.riskFlags.join(', ') || 'none'}.`;
+  }
+
+  private async runSanctionsCheck(companyName: string): Promise<SanctionsCheck> {
+    const target = this.normalizeCompanyName(companyName);
+    const records = await this.getOfacRecords();
+    const matches = records
+      .map((record) => ({
+        name: record.name,
+        programs: record.programs,
+        remarks: record.remarks,
+        score: Math.max(
+          this.scoreNameMatch(record.name, target),
+          record.remarks && this.normalizeAliasName(record.remarks).includes(this.normalizeAliasName(companyName))
+            ? 88
+            : 0,
+        ),
+      }))
+      .filter((entry) => entry.score >= 80)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 5);
+
+    const topMatches = matches.slice(0, 3);
+    const status: SanctionsCheck['status'] =
+      matches.some((entry) => entry.score >= 95)
+        ? 'MATCHED'
+        : matches.length > 0
+          ? 'REVIEW_REQUIRED'
+          : 'CLEAR';
+
+    return {
+      status,
+      source_name: 'OFAC SDN',
+      source_url: 'https://www.treasury.gov/ofac/downloads/sdn.csv',
+      match_count: matches.length,
+      top_matches: topMatches,
+      summary:
+        status === 'CLEAR'
+          ? 'No close match was found in the official OFAC SDN list.'
+          : `OFAC screening found ${matches.length} potential name match${matches.length === 1 ? '' : 'es'} that should be reviewed before transaction approval.`,
+    };
+  }
+
+  private async getOfacRecords() {
+    if (
+      this.sanctionsCache &&
+      Date.now() - this.sanctionsCache.fetchedAt < 6 * 60 * 60 * 1000
+    ) {
+      return this.sanctionsCache.records;
+    }
+
+    const response = await fetch('https://www.treasury.gov/ofac/downloads/sdn.csv', {
+      headers: {
+        accept: 'text/csv',
+        'user-agent':
+          process.env.OFAC_USER_AGENT ??
+          'TradeGuard/0.1 (contact: founder@tradeguard.local)',
+      },
+    });
+
+    if (!response.ok) {
+      throw new InternalServerErrorException({
+        success: false,
+        error_code: 'UPSTREAM_PROVIDER_ERROR',
+        message: `OFAC SDN export returned ${response.status}`,
+      });
+    }
+
+    const text = await response.text();
+    const records = text
+      .split(/\r?\n/)
+      .map((line) => this.parseCsvLine(line))
+      .filter((row) => row.length >= 2 && row[1]?.trim().length > 0)
+      .map((row) => ({
+        name: row[1]!.trim(),
+        programs: row[3]?.trim() || null,
+        remarks: row[row.length - 1]?.trim() || null,
+      }));
+
+    this.sanctionsCache = {
+      fetchedAt: Date.now(),
+      records,
+    };
+
+    return records;
+  }
+
+  private async runLitigationCheck(
+    companyName: string,
+  ): Promise<LitigationCheck> {
+    const searchUrl = new URL('https://www.courtlistener.com/api/rest/v4/search/');
+    searchUrl.searchParams.set('type', 'r');
+    searchUrl.searchParams.set('page_size', '20');
+    searchUrl.searchParams.set('q', `"${companyName}"`);
+
+    const response = await fetch(searchUrl, {
+      headers: {
+        accept: 'application/json',
+        'user-agent':
+          process.env.COURTLISTENER_USER_AGENT ??
+          'TradeGuard/0.1 (contact: founder@tradeguard.local)',
+      },
+    });
+
+    if (!response.ok) {
+      throw new InternalServerErrorException({
+        success: false,
+        error_code: 'UPSTREAM_PROVIDER_ERROR',
+        message: `CourtListener returned ${response.status}`,
+      });
+    }
+
+    const payload = (await response.json()) as {
+      results?: Array<Record<string, unknown>>;
+    };
+    const normalizedTarget = this.normalizeCompanyName(companyName);
+    const topCases = (payload.results ?? [])
+      .map((result) => {
+        const caseName = String(result.caseName ?? '');
+        return {
+          case_name: caseName,
+          filed_at:
+            result.dateFiled && String(result.dateFiled).trim().length > 0
+              ? String(result.dateFiled).slice(0, 10)
+              : null,
+          court:
+            result.court && String(result.court).trim().length > 0
+              ? String(result.court).trim()
+              : null,
+          docket_url:
+            result.absolute_url && String(result.absolute_url).trim().length > 0
+              ? `https://www.courtlistener.com${String(result.absolute_url).trim()}`
+              : null,
+          score: this.scoreNameMatch(caseName, normalizedTarget),
+        };
+      })
+      .filter((entry) => entry.score >= 70)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 5);
+
+    const recentCaseCount = topCases.filter((entry) => {
+      if (!entry.filed_at) return false;
+      const filedAt = new Date(entry.filed_at);
+      return Date.now() - filedAt.getTime() <= 3 * 365 * 24 * 60 * 60 * 1000;
+    }).length;
+
+    const status: LitigationCheck['status'] =
+      topCases.length >= 8 || recentCaseCount >= 3
+        ? 'HIGH'
+        : topCases.length >= 3 || recentCaseCount >= 1
+          ? 'ELEVATED'
+          : 'CLEAR';
+
+    return {
+      status,
+      source_name: 'CourtListener',
+      source_url: 'https://www.courtlistener.com/api/rest/v4/search/',
+      case_count: topCases.length,
+      recent_case_count: recentCaseCount,
+      top_cases: topCases.slice(0, 3),
+      summary:
+        topCases.length === 0
+          ? 'No relevant public litigation results were found in CourtListener.'
+          : `CourtListener returned ${topCases.length} relevant public litigation result${topCases.length === 1 ? '' : 's'}, including ${recentCaseCount} filed within the last three years.`,
+    };
+  }
+
+  private parseCsvLine(line: string) {
+    if (!line) return [];
+
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+
+      if (char === '"') {
+        if (inQuotes && line[index + 1] === '"') {
+          current += '"';
+          index += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (char === ',' && !inQuotes) {
+        values.push(current);
+        current = '';
+        continue;
+      }
+
+      current += char;
+    }
+
+    values.push(current);
+    return values;
   }
 
   private async lookupCompany(
@@ -653,7 +1000,7 @@ export class CreditService {
     };
   }
 
-  private evaluateRisk(company: NormalizedCompanyRecord) {
+  private evaluateRisk(company: NormalizedCompanyRecord): RiskEvaluation {
     let score = 100;
     const riskFlags: string[] = [];
 
@@ -836,7 +1183,7 @@ export class CreditService {
     };
   }
 
-  private mapScoreToGrade(score: number) {
+  private mapScoreToGrade(score: number): 'A' | 'B' | 'C' | 'D' {
     if (score >= 90) return 'A';
     if (score >= 75) return 'B';
     if (score >= 60) return 'C';
