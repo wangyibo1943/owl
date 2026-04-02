@@ -23,14 +23,14 @@ TradeGuard helps cross-border B2B sellers identify buyer risk, preserve transact
 Validate that users will complete a pre-trade risk flow:
 
 1. Search buyer company
-2. Review credit result
+2. Review buyer risk result
 3. Upload contract or chat evidence
 4. Receive notarization certificate
 5. Start a US legal trigger package
 
 ## In Scope
 
-- Buyer credit lookup
+- Buyer risk lookup
 - Company basic profile display
 - Risk grade and risk flags
 - Contract or chat file upload
@@ -52,9 +52,9 @@ Validate that users will complete a pre-trade risk flow:
 
 ## User Stories
 
-### US-001 Credit Lookup
+### US-001 Buyer Risk Lookup
 
-As a cross-border seller, I want to enter a company name, EIN, or website and quickly see a simple credit signal before I decide whether to continue the deal.
+As a cross-border seller, I want to enter a company name, EIN, or website and quickly see a simple buyer risk signal before I decide whether to continue the deal.
 
 ### US-002 Evidence Preservation
 
@@ -72,7 +72,7 @@ As a seller, after evidence is preserved, I want one action that prepares a US l
 
 1. User opens home page
 2. User enters company name
-3. System calls credit workflow
+3. System calls buyer risk workflow
 4. User sees grade, risk flags, and company basics
 5. User uploads a contract or chat file
 6. System hashes the file and triggers notarization workflow
@@ -83,7 +83,7 @@ As a seller, after evidence is preserved, I want one action that prepares a US l
 
 ## Feature Requirements
 
-### Feature A: Buyer Credit Lookup
+### Feature A: Buyer Risk Lookup
 
 Input:
 
@@ -94,7 +94,7 @@ Input:
 
 Output:
 
-- credit_grade: `A | B | C | D`
+- transaction_risk_grade: `A | B | C | D`
 - risk_flags
 - company profile
 - source references

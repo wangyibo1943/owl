@@ -17,7 +17,7 @@ Response:
 }
 ```
 
-## 2. Credit Lookup
+## 2. Buyer Risk Lookup
 
 ### `POST /credit/lookup`
 
@@ -46,9 +46,24 @@ Success:
     "website": "https://www.apple.com",
     "credit_grade": "A",
     "risk_score": 95,
+    "transaction_risk_grade": "A",
+    "transaction_risk_score": 95,
     "risk_flags": [],
     "match_confidence": "HIGH",
-    "summary": "SEC EDGAR data indicates a structurally stable entity. Current grade is A.",
+    "summary": "Transaction risk grade is A.",
+    "transaction_risk_summary": "Transaction risk grade is A.",
+    "identity_check": {
+      "status": "VERIFIED",
+      "source_name": "SEC EDGAR"
+    },
+    "sanctions_check": {
+      "status": "CLEAR",
+      "source_name": "OFAC SDN"
+    },
+    "litigation_check": {
+      "status": "ELEVATED",
+      "source_name": "CourtListener"
+    },
     "source_name": "SEC EDGAR",
     "source_url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193"
   }

@@ -171,8 +171,11 @@ export class CreditService {
       credit_grade: aggregateEvaluation.creditGrade,
       risk_score: aggregateEvaluation.riskScore,
       risk_flags: aggregateEvaluation.riskFlags,
+      transaction_risk_grade: aggregateEvaluation.creditGrade,
+      transaction_risk_score: aggregateEvaluation.riskScore,
       match_confidence: company.matchConfidence,
       summary: aggregateEvaluation.summary,
+      transaction_risk_summary: aggregateEvaluation.summary,
       source_name: company.sourceName,
       source_url: company.sourceUrl,
       overall_grade: aggregateEvaluation.creditGrade,
@@ -275,7 +278,7 @@ export class CreditService {
     litigationCheck: LitigationCheck;
     riskFlags: string[];
   }) {
-    return `Entity grade is ${input.creditGrade}. Identity source is ${input.company.sourceName}. Sanctions screen is ${input.sanctionsCheck.status.toLowerCase()} with ${input.sanctionsCheck.match_count} potential matches. Litigation screen is ${input.litigationCheck.status.toLowerCase()} with ${input.litigationCheck.case_count} relevant public cases and ${input.litigationCheck.recent_case_count} recent cases. Current flags: ${input.riskFlags.join(', ') || 'none'}.`;
+    return `Transaction risk grade is ${input.creditGrade}. Identity source is ${input.company.sourceName}. Sanctions screen is ${input.sanctionsCheck.status.toLowerCase()} with ${input.sanctionsCheck.match_count} potential matches. Litigation screen is ${input.litigationCheck.status.toLowerCase()} with ${input.litigationCheck.case_count} relevant public cases and ${input.litigationCheck.recent_case_count} recent cases. Current flags: ${input.riskFlags.join(', ') || 'none'}.`;
   }
 
   private async runSanctionsCheck(companyName: string): Promise<SanctionsCheck> {
@@ -1196,10 +1199,10 @@ export class CreditService {
     company: NormalizedCompanyRecord,
   ) {
     if (riskFlags.length === 0) {
-      return `${company.sourceName} data indicates a structurally stable entity with high registry confidence. Current grade is ${creditGrade}. Latest filing visibility and registry signals look healthy.`;
+      return `${company.sourceName} data indicates a structurally stable entity with high registry confidence. Current transaction risk grade is ${creditGrade}. Latest filing visibility and registry signals look healthy.`;
     }
 
-    return `Entity grade is ${creditGrade}. Source is ${company.sourceName}. Registry review found the following risk flags: ${riskFlags.join(
+    return `Transaction risk grade is ${creditGrade}. Source is ${company.sourceName}. Registry review found the following risk flags: ${riskFlags.join(
       ', ',
     )}. Current status is ${company.status ?? 'Unknown'}, jurisdiction is ${company.jurisdiction ?? 'not available'}, website match is ${company.websiteMatch.toLowerCase()}, match confidence is ${company.matchConfidence.toLowerCase()}, and latest filing date is ${company.lastFilingDate ?? 'not available'}.`;
   }

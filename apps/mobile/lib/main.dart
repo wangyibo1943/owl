@@ -99,15 +99,16 @@ class AppCopy {
 
   bool get isChinese => language == AppLanguage.zh;
 
-  String get creditTab => isChinese ? '征信查询' : 'Credit';
+  String get creditTab => isChinese ? '风险查询' : 'Risk';
   String get evidenceTab => isChinese ? '证据存证' : 'Evidence';
   String get switchLanguage => isChinese ? '切换语言' : 'Language';
   String get chinese => '中文';
   String get english => 'English';
-  String get creditHeroTitle => isChinese ? '美国买家信用查询' : 'US Buyer Risk Check';
+  String get creditHeroTitle =>
+      isChinese ? '美国买家交易风险查询' : 'US Buyer Transaction Risk Check';
   String get creditHeroBody => isChinese
-      ? '连接 TradeGuard 实时后端，查询企业主体，给出信用等级、匹配置信度和可解释风险提示，帮助你在发货前先看清对方。'
-      : 'Run a live company lookup against TradeGuard backend, score the entity, and surface registry confidence before you ship.';
+      ? '连接 TradeGuard 实时后端，一次返回主体核验、制裁筛查和司法风险结果，帮助你在发货前先看清对方。'
+      : 'Run one live buyer risk lookup and get identity, sanctions, and litigation signals before you ship.';
   String get lookupInput => isChinese ? '查询条件' : 'Lookup Input';
   String get companyName => isChinese ? '公司名称' : 'Company name';
   String get website => isChinese ? '官网' : 'Website';
@@ -116,11 +117,11 @@ class AppCopy {
   String get auto => isChinese ? '自动' : 'Auto';
   String get california => isChinese ? '加州' : 'California';
   String get checking => isChinese ? '查询中...' : 'Checking...';
-  String get runCreditCheck => isChinese ? '开始征信' : 'Run Credit Check';
+  String get runCreditCheck => isChinese ? '开始风险查询' : 'Run Risk Check';
   String get readyToVerifyBuyer => isChinese ? '准备开始核验买家' : 'Ready to verify a buyer';
   String get readyToVerifyBuyerBody => isChinese
-      ? '输入美国公司名称和可选官网，即可获取实时信用等级、主体匹配置信度和风险解释。'
-      : 'Enter a US company name and optional website to get a live risk grade, registry match confidence, and evidence-backed explanation.';
+      ? '输入美国公司名称和可选官网，即可一次获取主体核验、制裁筛查和司法风险结果。'
+      : 'Enter a US company name and optional website to get identity, sanctions, and litigation checks in one report.';
   String get evidenceHeroTitle => isChinese ? '证据固定与存证' : 'Evidence Preservation';
   String get evidenceHeroBody => isChinese
       ? '上传合同扫描件、聊天记录或截图后，系统会自动保存文件、生成哈希、完成链上锚定，并返回可下载的存证证明。'
@@ -215,9 +216,9 @@ class AppCopy {
       ? '证据已被系统接收，正在等待提供方状态更新。'
       : 'The evidence has been accepted and is waiting for provider status updates.';
   String gradeRiskTitle(String grade) => switch (grade) {
-        'A' => isChinese ? '结构性风险较低' : 'Low structural risk',
+        'A' => isChinese ? '交易风险较低' : 'Low transaction risk',
         'B' => isChinese ? '建议进一步复核' : 'Moderate review recommended',
-        'C' => isChinese ? '商业风险偏高' : 'Elevated commercial risk',
+        'C' => isChinese ? '交易风险偏高' : 'Elevated transaction risk',
         _ => isChinese ? '高风险预警' : 'High risk warning',
       };
   String websiteMatchLabel(String value) => switch (value) {
