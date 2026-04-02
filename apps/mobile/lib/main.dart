@@ -122,6 +122,11 @@ class AppCopy {
   String get readyToVerifyBuyerBody => isChinese
       ? '输入美国公司名称和可选官网，即可一次获取主体核验、制裁筛查和司法风险结果。'
       : 'Enter a US company name and optional website to get identity, sanctions, and litigation checks in one report.';
+  String get manualThreeChecks => isChinese ? '查不到时就继续这三步' : 'Continue with these three checks';
+  String get manualThreeChecksBody => isChinese
+      ? '先去 OpenCorporates 做初查，再到州注册网站复核，最后搜州法院和联邦法院诉讼。'
+      : 'If automatic results are not ready yet, continue with these three manual checks: state registry, business credit, and courts.';
+  String get openRegistrySearch => isChinese ? '打开州注册搜索' : 'Open Registry Search';
   String get evidenceHeroTitle => isChinese ? '证据固定与存证' : 'Evidence Preservation';
   String get evidenceHeroBody => isChinese
       ? '上传合同扫描件、聊天记录或截图后，系统会自动保存文件、生成哈希、完成链上锚定，并返回可下载的存证证明。'
@@ -199,9 +204,9 @@ class AppCopy {
   String get industry => isChinese ? '行业' : 'Industry';
   String get notAvailable => isChinese ? '暂无' : 'N/A';
   String get requestFailed => isChinese ? '请求失败' : 'Request failed';
-  String get companyNotFound => isChinese ? '未找到该公司' : 'Company was not found';
+  String get companyNotFound => isChinese ? '自动核验暂未命中，先看下方三查入口。' : 'Automatic lookup did not resolve this company. Use the three checks below.';
   String get californiaPending => isChinese
-      ? '加州私营公司官方查询通道还在等待州务卿开放，当前先完成了加州优先模式。'
+      ? '加州官方自动接口还没放开，先用下方 OpenCorporates 和法院入口继续查。'
       : 'California private-company lookup is waiting for official California SOS access.';
   String get unsupportedState => isChinese
       ? '当前 MVP 私营公司州注册查询支持加州、特拉华和德州'
@@ -429,6 +434,43 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
     }
   }
 
+  Uri _buildOpenCorporatesSearchUrl() {
+    final url = Uri.parse('https://opencorporates.com/companies').replace(
+      queryParameters: {
+        'q': _companyController.text.trim(),
+        'type': 'companies',
+        if (_selectedState == 'CA') 'jurisdiction_code': 'us_ca',
+      },
+    );
+    return url;
+  }
+
+  Uri _buildRegistrySearchUrl() {
+    if (_selectedState == 'CA') {
+      return Uri.parse('https://bizfileonline.sos.ca.gov/search/business');
+    }
+    return Uri.parse(
+      'https://www.google.com/search?q=${Uri.encodeQueryComponent("${_companyController.text.trim()} secretary of state business search")}',
+    );
+  }
+
+  Uri _buildStateCourtSearchUrl() {
+    final suffix = _selectedState == 'CA' ? 'california state court' : 'state court';
+    return Uri.parse(
+      'https://www.google.com/search?q=${Uri.encodeQueryComponent("${_companyController.text.trim()} lawsuit $suffix")}',
+    );
+  }
+
+  Uri _buildFederalCourtSearchUrl() {
+    return Uri.parse(
+      'https://www.google.com/search?q=${Uri.encodeQueryComponent("${_companyController.text.trim()} lawsuit federal court")}',
+    );
+  }
+
+  Future<void> _openExternal(Uri url) async {
+    await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final copy = context.copy;
@@ -520,6 +562,19 @@ class _CreditCheckScreenState extends State<CreditCheckScreen> {
             title: copy.readyToVerifyBuyer,
             body: copy.readyToVerifyBuyerBody,
             icon: Icons.domain_verification_outlined,
+          ),
+        ],
+        if (!_isLoading &&
+            _result == null &&
+            _companyController.text.trim().isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _ManualLookupCard(
+            title: copy.manualThreeChecks,
+            body: copy.manualThreeChecksBody,
+            onOpenRegistry: () => _openExternal(_buildRegistrySearchUrl()),
+            onOpenCommercial: () => _openExternal(_buildOpenCorporatesSearchUrl()),
+            onOpenStateCourt: () => _openExternal(_buildStateCourtSearchUrl()),
+            onOpenFederalCourt: () => _openExternal(_buildFederalCourtSearchUrl()),
           ),
         ],
         if (_result != null) ...[
@@ -1253,6 +1308,76 @@ class _EmptyStateCard extends StatelessWidget {
                 height: 1.5,
               ),
               textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ManualLookupCard extends StatelessWidget {
+  const _ManualLookupCard({
+    required this.title,
+    required this.body,
+    required this.onOpenRegistry,
+    required this.onOpenCommercial,
+    required this.onOpenStateCourt,
+    required this.onOpenFederalCourt,
+  });
+
+  final String title;
+  final String body;
+  final Future<void> Function() onOpenRegistry;
+  final Future<void> Function() onOpenCommercial;
+  final Future<void> Function() onOpenStateCourt;
+  final Future<void> Function() onOpenFederalCourt;
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = context.copy;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              body,
+              style: const TextStyle(color: Color(0xFF4B5563), height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onOpenRegistry,
+                  icon: const Icon(Icons.domain_verification_outlined),
+                  label: Text(copy.openRegistrySearch),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onOpenCommercial,
+                  icon: const Icon(Icons.business_center_outlined),
+                  label: Text(copy.openCommercialSearch),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onOpenStateCourt,
+                  icon: const Icon(Icons.gavel_outlined),
+                  label: Text(copy.openStateCourtSearch),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onOpenFederalCourt,
+                  icon: const Icon(Icons.account_balance_outlined),
+                  label: Text(copy.openFederalCourtSearch),
+                ),
+              ],
             ),
           ],
         ),
