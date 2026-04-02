@@ -56,6 +56,17 @@ Success:
       "status": "VERIFIED",
       "source_name": "SEC EDGAR"
     },
+    "public_intelligence_check": {
+      "status": "LINK_READY",
+      "source_name": "Google Search",
+      "configured": false,
+      "result_count": 0,
+      "negative_hit_count": 0,
+      "google_company_search_url": "https://www.google.com/search?q=%22Apple+Inc.%22",
+      "google_lawsuit_search_url": "https://www.google.com/search?q=Apple+Inc.+lawsuit+state+court",
+      "google_complaint_search_url": "https://www.google.com/search?q=Apple+Inc.+complaint+OR+scam+OR+fraud+OR+unpaid+OR+non-payment",
+      "top_results": []
+    },
     "sanctions_check": {
       "status": "CLEAR",
       "source_name": "OFAC SDN"

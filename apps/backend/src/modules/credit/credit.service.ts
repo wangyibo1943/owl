@@ -97,6 +97,28 @@ type LitigationCheck = {
   summary: string;
 };
 
+type PublicIntelligenceResultItem = {
+  title: string;
+  snippet: string | null;
+  link: string;
+  domain: string;
+  negative_signal: boolean;
+};
+
+type PublicIntelligenceCheck = {
+  status: 'CLEAR' | 'SIGNS_FOUND' | 'LINK_READY';
+  source_name: 'Google Search';
+  source_url: string;
+  configured: boolean;
+  result_count: number;
+  negative_hit_count: number;
+  google_company_search_url: string;
+  google_lawsuit_search_url: string;
+  google_complaint_search_url: string;
+  top_results: PublicIntelligenceResultItem[];
+  summary: string;
+};
+
 type CommercialCheck = {
   status: 'LINK_READY';
   source_name: 'OpenCorporates';
@@ -161,15 +183,18 @@ export class CreditService {
     const identityEvaluation = this.evaluateRisk(company);
     const identityCheck = this.buildIdentityCheck(company, identityEvaluation);
     const commercialCheck = this.buildCommercialCheck(companyName, companyState);
-    const [sanctionsCheck, litigationCheck] = await Promise.all([
+    const [sanctionsCheck, litigationCheck, publicIntelligenceCheck] =
+      await Promise.all([
       this.runSanctionsCheck(company.name),
       this.runLitigationCheck(company.name, companyState),
+      this.runPublicIntelligenceCheck(company.name, companyState),
     ]);
     const aggregateEvaluation = this.buildAggregateEvaluation({
       company,
       identityEvaluation,
       sanctionsCheck,
       litigationCheck,
+      publicIntelligenceCheck,
     });
 
     const responsePayload = {
@@ -200,6 +225,7 @@ export class CreditService {
       overall_risk_score: aggregateEvaluation.riskScore,
       identity_check: identityCheck,
       commercial_check: commercialCheck,
+      public_intelligence_check: publicIntelligenceCheck,
       sanctions_check: sanctionsCheck,
       litigation_check: litigationCheck,
     };
@@ -217,6 +243,7 @@ export class CreditService {
         identity_source: company.rawPayload,
         identity_check: identityCheck,
         commercial_check: commercialCheck,
+        public_intelligence_check: publicIntelligenceCheck,
         sanctions_check: sanctionsCheck,
         litigation_check: litigationCheck,
       },
@@ -249,6 +276,7 @@ export class CreditService {
     identityEvaluation: RiskEvaluation;
     sanctionsCheck: SanctionsCheck;
     litigationCheck: LitigationCheck;
+    publicIntelligenceCheck: PublicIntelligenceCheck;
   }): RiskEvaluation {
     let score = input.identityEvaluation.riskScore;
     const riskFlags = [...input.identityEvaluation.riskFlags];
@@ -273,6 +301,14 @@ export class CreditService {
       riskFlags.push('RECENT_LITIGATION_ACTIVITY');
     }
 
+    if (input.publicIntelligenceCheck.negative_hit_count >= 3) {
+      score -= 15;
+      riskFlags.push('NEGATIVE_PUBLIC_INTELLIGENCE');
+    } else if (input.publicIntelligenceCheck.negative_hit_count > 0) {
+      score -= 8;
+      riskFlags.push('PUBLIC_RISK_SIGNALS');
+    }
+
     score = Math.max(0, Math.min(100, score));
     const creditGrade = this.mapScoreToGrade(score);
     const summary = this.buildAggregateSummary({
@@ -280,6 +316,7 @@ export class CreditService {
       creditGrade,
       sanctionsCheck: input.sanctionsCheck,
       litigationCheck: input.litigationCheck,
+      publicIntelligenceCheck: input.publicIntelligenceCheck,
       riskFlags,
     });
 
@@ -296,9 +333,146 @@ export class CreditService {
     creditGrade: 'A' | 'B' | 'C' | 'D';
     sanctionsCheck: SanctionsCheck;
     litigationCheck: LitigationCheck;
+    publicIntelligenceCheck: PublicIntelligenceCheck;
     riskFlags: string[];
   }) {
-    return `Transaction risk grade is ${input.creditGrade}. Identity source is ${input.company.sourceName}. Sanctions screen is ${input.sanctionsCheck.status.toLowerCase()} with ${input.sanctionsCheck.match_count} potential matches. Litigation screen is ${input.litigationCheck.status.toLowerCase()} with ${input.litigationCheck.case_count} relevant public cases and ${input.litigationCheck.recent_case_count} recent cases. Current flags: ${input.riskFlags.join(', ') || 'none'}.`;
+    return `Transaction risk grade is ${input.creditGrade}. Identity source is ${input.company.sourceName}. Public intelligence is ${input.publicIntelligenceCheck.status.toLowerCase()} with ${input.publicIntelligenceCheck.result_count} surfaced web results and ${input.publicIntelligenceCheck.negative_hit_count} negative signals. Sanctions screen is ${input.sanctionsCheck.status.toLowerCase()} with ${input.sanctionsCheck.match_count} potential matches. Litigation screen is ${input.litigationCheck.status.toLowerCase()} with ${input.litigationCheck.case_count} relevant public cases and ${input.litigationCheck.recent_case_count} recent cases. Current flags: ${input.riskFlags.join(', ') || 'none'}.`;
+  }
+
+  private async runPublicIntelligenceCheck(
+    companyName: string,
+    companyState: string | null,
+  ): Promise<PublicIntelligenceCheck> {
+    const companySearchQuery = `"${companyName}"`;
+    const lawsuitQuery = this.buildStateCourtQuery(companyName, companyState);
+    const complaintQuery = `${companyName} complaint OR scam OR fraud OR unpaid OR non-payment`;
+    const googleCompanySearchUrl = this.buildGoogleSearchUrl(companySearchQuery);
+    const googleLawsuitSearchUrl = this.buildGoogleSearchUrl(lawsuitQuery);
+    const googleComplaintSearchUrl = this.buildGoogleSearchUrl(complaintQuery);
+    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
+    const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
+
+    if (!apiKey || !searchEngineId) {
+      return {
+        status: 'LINK_READY',
+        source_name: 'Google Search',
+        source_url: 'https://developers.google.com/custom-search/v1/overview',
+        configured: false,
+        result_count: 0,
+        negative_hit_count: 0,
+        google_company_search_url: googleCompanySearchUrl,
+        google_lawsuit_search_url: googleLawsuitSearchUrl,
+        google_complaint_search_url: googleComplaintSearchUrl,
+        top_results: [],
+        summary:
+          'Google public-intelligence automation is not configured yet. Use the included company, complaint, and lawsuit searches for manual review.',
+      };
+    }
+
+    const queryResults = await Promise.all([
+      this.searchGoogleProgrammable(companySearchQuery, apiKey, searchEngineId),
+      this.searchGoogleProgrammable(lawsuitQuery, apiKey, searchEngineId),
+      this.searchGoogleProgrammable(complaintQuery, apiKey, searchEngineId),
+    ]);
+
+    const items = queryResults
+      .flatMap((result) => result.items)
+      .map((item) => {
+        const text = `${item.title} ${item.snippet ?? ''}`.toLowerCase();
+        return {
+          ...item,
+          negative_signal: this.hasNegativePublicSignal(text),
+        };
+      });
+
+    const deduped = Array.from(
+      new Map(items.map((item) => [item.link, item])).values(),
+    ).slice(0, 6);
+    const negativeHitCount = deduped.filter((item) => item.negative_signal).length;
+    const status: PublicIntelligenceCheck['status'] =
+      negativeHitCount > 0 ? 'SIGNS_FOUND' : 'CLEAR';
+
+    return {
+      status,
+      source_name: 'Google Search',
+      source_url: 'https://developers.google.com/custom-search/v1/overview',
+      configured: true,
+      result_count: deduped.length,
+      negative_hit_count: negativeHitCount,
+      google_company_search_url: googleCompanySearchUrl,
+      google_lawsuit_search_url: googleLawsuitSearchUrl,
+      google_complaint_search_url: googleComplaintSearchUrl,
+      top_results: deduped,
+      summary:
+        deduped.length === 0
+          ? 'No relevant public-web search results were returned from Google Programmable Search.'
+          : negativeHitCount > 0
+            ? `Google public-intelligence search surfaced ${deduped.length} relevant results, including ${negativeHitCount} result${negativeHitCount === 1 ? '' : 's'} with complaint, fraud, or lawsuit-style wording that should be reviewed.`
+            : `Google public-intelligence search surfaced ${deduped.length} relevant results without obvious complaint or fraud wording in the top snippets.`,
+    };
+  }
+
+  private async searchGoogleProgrammable(
+    query: string,
+    apiKey: string,
+    searchEngineId: string,
+  ): Promise<{ items: PublicIntelligenceResultItem[] }> {
+    const url = new URL('https://www.googleapis.com/customsearch/v1');
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('cx', searchEngineId);
+    url.searchParams.set('q', query);
+    url.searchParams.set('num', '3');
+    url.searchParams.set('safe', 'off');
+
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      return { items: [] };
+    }
+
+    const payload = (await response.json()) as {
+      items?: Array<Record<string, unknown>>;
+    };
+
+    return {
+      items: (payload.items ?? [])
+        .map((item) => {
+          const link = String(item.link ?? '').trim();
+          if (!link) return null;
+          return {
+            title: String(item.title ?? '').trim() || link,
+            snippet:
+              item.snippet && String(item.snippet).trim().length > 0
+                ? String(item.snippet).trim()
+                : null,
+            link,
+            domain: this.extractHostname(link) ?? link,
+            negative_signal: false,
+          };
+        })
+        .filter(
+          (item): item is PublicIntelligenceResultItem => Boolean(item),
+        ),
+    };
+  }
+
+  private hasNegativePublicSignal(text: string) {
+    return [
+      'lawsuit',
+      'complaint',
+      'fraud',
+      'scam',
+      'ripoff',
+      'breach',
+      'judgment',
+      'debt',
+      'unpaid',
+      'non-payment',
+      'default',
+      'collections',
+    ].some((keyword) => text.includes(keyword));
   }
 
   private async runSanctionsCheck(companyName: string): Promise<SanctionsCheck> {

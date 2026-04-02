@@ -176,6 +176,7 @@ class AppCopy {
   String get source => isChinese ? '来源' : 'Source';
   String get identityCheck => isChinese ? '州注册核验' : 'State Registry';
   String get commercialCheck => isChinese ? '商业信用' : 'Business Credit';
+  String get publicIntelligence => isChinese ? '公开风险情报' : 'Public Intelligence';
   String get sanctionsCheck => isChinese ? '制裁筛查' : 'Sanctions Check';
   String get litigationCheck => isChinese ? '法院诉讼' : 'Court & Lawsuits';
   String get screeningStatus => isChinese ? '筛查状态' : 'Screening Status';
@@ -184,6 +185,10 @@ class AppCopy {
   String get potentialMatches => isChinese ? '潜在命中' : 'Potential Matches';
   String get openCommercialSearch =>
       isChinese ? '打开 OpenCorporates' : 'Open OpenCorporates';
+  String get openCompanySearch =>
+      isChinese ? '搜公司信息' : 'Search Company Info';
+  String get openComplaintSearch =>
+      isChinese ? '搜投诉/欺诈' : 'Search Complaints';
   String get openStateCourtSearch =>
       isChinese ? '搜州法院' : 'Search State Courts';
   String get openFederalCourtSearch =>
@@ -272,6 +277,8 @@ class AppCopy {
       'HIGH_LITIGATION_ACTIVITY': '司法纠纷较多',
       'ELEVATED_LITIGATION_ACTIVITY': '存在一定司法纠纷',
       'RECENT_LITIGATION_ACTIVITY': '近三年存在司法纠纷',
+      'NEGATIVE_PUBLIC_INTELLIGENCE': '公开网络信息出现明显负面信号',
+      'PUBLIC_RISK_SIGNALS': '公开网络信息存在风险线索',
     };
 
     return isChinese ? (zh[flag] ?? flag) : flag;
@@ -1004,6 +1011,76 @@ class _CreditResultCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _CheckSectionCard(
+              title: copy.publicIntelligence,
+              tone: result.publicIntelligenceCheck.tone,
+              summary: result.publicIntelligenceCheck.summary,
+              metrics: [
+                _SectionMetric(
+                  copy.screeningStatus,
+                  result.publicIntelligenceCheck.status,
+                ),
+                _SectionMetric(
+                  copy.source,
+                  result.publicIntelligenceCheck.sourceName,
+                ),
+                _SectionMetric(
+                  copy.caseCount,
+                  '${result.publicIntelligenceCheck.resultCount}',
+                ),
+                _SectionMetric(
+                  copy.potentialMatches,
+                  '${result.publicIntelligenceCheck.negativeHitCount}',
+                ),
+              ],
+              extra: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      if (result.publicIntelligenceCheck.googleCompanySearchUrl.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => launchUrl(
+                            Uri.parse(
+                              result.publicIntelligenceCheck.googleCompanySearchUrl,
+                            ),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: const Icon(Icons.search),
+                          label: Text(copy.openCompanySearch),
+                        ),
+                      if (result.publicIntelligenceCheck.googleComplaintSearchUrl.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => launchUrl(
+                            Uri.parse(
+                              result.publicIntelligenceCheck.googleComplaintSearchUrl,
+                            ),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: const Icon(Icons.report_problem_outlined),
+                          label: Text(copy.openComplaintSearch),
+                        ),
+                    ],
+                  ),
+                  if (result.publicIntelligenceCheck.topResults.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Column(
+                      children: result.publicIntelligenceCheck.topResults
+                          .map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _PublicIntelRow(item: item),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            _CheckSectionCard(
               title: copy.litigationCheck,
               tone: result.litigationCheck.tone,
               summary: result.litigationCheck.summary,
@@ -1174,6 +1251,79 @@ class _SectionMetric {
 
   final String label;
   final String value;
+}
+
+class _PublicIntelRow extends StatelessWidget {
+  const _PublicIntelRow({required this.item});
+
+  final PublicIntelligenceItemResult item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              if (item.negativeSignal)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4DB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    'Risk',
+                    style: TextStyle(
+                      color: Color(0xFFB45309),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.domain,
+            style: const TextStyle(
+              color: Color(0xFF0F766E),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (item.snippet != null && item.snippet!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              item.snippet!,
+              style: const TextStyle(
+                color: Color(0xFF4B5563),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _EvidenceResultCard extends StatelessWidget {
@@ -1706,6 +1856,7 @@ class CreditLookupResult {
     required this.websiteMatch,
     required this.identityCheck,
     required this.commercialCheck,
+    required this.publicIntelligenceCheck,
     required this.sanctionsCheck,
     required this.litigationCheck,
     this.ticker,
@@ -1731,6 +1882,7 @@ class CreditLookupResult {
   final String websiteMatch;
   final IdentityCheckResult identityCheck;
   final CommercialCheckResult commercialCheck;
+  final PublicIntelligenceCheckResult publicIntelligenceCheck;
   final SanctionsCheckResult sanctionsCheck;
   final LitigationCheckResult litigationCheck;
   final String? lastFilingDate;
@@ -1761,6 +1913,12 @@ class CreditLookupResult {
       commercialCheck: CommercialCheckResult.fromJson(
         Map<String, dynamic>.from(
           (json['commercial_check'] as Map?) ?? const <String, dynamic>{},
+        ),
+      ),
+      publicIntelligenceCheck: PublicIntelligenceCheckResult.fromJson(
+        Map<String, dynamic>.from(
+          (json['public_intelligence_check'] as Map?) ??
+              const <String, dynamic>{},
         ),
       ),
       sanctionsCheck: SanctionsCheckResult.fromJson(
@@ -1837,6 +1995,102 @@ class CommercialCheckResult {
         background: Color(0xFFE8F3F0),
         foreground: Color(0xFF0F766E),
       );
+}
+
+class PublicIntelligenceCheckResult {
+  PublicIntelligenceCheckResult({
+    required this.status,
+    required this.sourceName,
+    required this.configured,
+    required this.resultCount,
+    required this.negativeHitCount,
+    required this.googleCompanySearchUrl,
+    required this.googleLawsuitSearchUrl,
+    required this.googleComplaintSearchUrl,
+    required this.summary,
+    required this.topResults,
+  });
+
+  final String status;
+  final String sourceName;
+  final bool configured;
+  final int resultCount;
+  final int negativeHitCount;
+  final String googleCompanySearchUrl;
+  final String googleLawsuitSearchUrl;
+  final String googleComplaintSearchUrl;
+  final String summary;
+  final List<PublicIntelligenceItemResult> topResults;
+
+  factory PublicIntelligenceCheckResult.fromJson(Map<String, dynamic> json) {
+    return PublicIntelligenceCheckResult(
+      status: json['status'] as String? ?? 'LINK_READY',
+      sourceName: json['source_name'] as String? ?? 'Google Search',
+      configured: json['configured'] as bool? ?? false,
+      resultCount: (json['result_count'] as num?)?.toInt() ?? 0,
+      negativeHitCount: (json['negative_hit_count'] as num?)?.toInt() ?? 0,
+      googleCompanySearchUrl:
+          json['google_company_search_url'] as String? ?? '',
+      googleLawsuitSearchUrl:
+          json['google_lawsuit_search_url'] as String? ?? '',
+      googleComplaintSearchUrl:
+          json['google_complaint_search_url'] as String? ?? '',
+      summary: json['summary'] as String? ?? '',
+      topResults: (json['top_results'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => PublicIntelligenceItemResult.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  StatusTone get tone {
+    switch (status) {
+      case 'SIGNS_FOUND':
+        return const StatusTone(
+          background: Color(0xFFFFF4DB),
+          foreground: Color(0xFFB45309),
+        );
+      case 'CLEAR':
+        return const StatusTone(
+          background: Color(0xFFE6F6EC),
+          foreground: Color(0xFF14532D),
+        );
+      default:
+        return const StatusTone(
+          background: Color(0xFFE8F3F0),
+          foreground: Color(0xFF0F766E),
+        );
+    }
+  }
+}
+
+class PublicIntelligenceItemResult {
+  PublicIntelligenceItemResult({
+    required this.title,
+    required this.domain,
+    required this.link,
+    required this.negativeSignal,
+    this.snippet,
+  });
+
+  final String title;
+  final String domain;
+  final String link;
+  final String? snippet;
+  final bool negativeSignal;
+
+  factory PublicIntelligenceItemResult.fromJson(Map<String, dynamic> json) {
+    return PublicIntelligenceItemResult(
+      title: json['title'] as String? ?? 'Untitled',
+      domain: json['domain'] as String? ?? '',
+      link: json['link'] as String? ?? '',
+      snippet: json['snippet'] as String?,
+      negativeSignal: json['negative_signal'] as bool? ?? false,
+    );
+  }
 }
 
 class IdentityCheckResult {
