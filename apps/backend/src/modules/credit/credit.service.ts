@@ -91,7 +91,16 @@ type LitigationCheck = {
   source_url: string;
   case_count: number;
   recent_case_count: number;
+  google_state_search_url: string;
+  google_federal_search_url: string;
   top_cases: LitigationCase[];
+  summary: string;
+};
+
+type CommercialCheck = {
+  status: 'LINK_READY';
+  source_name: 'OpenCorporates';
+  source_url: string;
   summary: string;
 };
 
@@ -151,9 +160,10 @@ export class CreditService {
 
     const identityEvaluation = this.evaluateRisk(company);
     const identityCheck = this.buildIdentityCheck(company, identityEvaluation);
+    const commercialCheck = this.buildCommercialCheck(companyName, companyState);
     const [sanctionsCheck, litigationCheck] = await Promise.all([
       this.runSanctionsCheck(company.name),
-      this.runLitigationCheck(company.name),
+      this.runLitigationCheck(company.name, companyState),
     ]);
     const aggregateEvaluation = this.buildAggregateEvaluation({
       company,
@@ -189,6 +199,7 @@ export class CreditService {
       overall_grade: aggregateEvaluation.creditGrade,
       overall_risk_score: aggregateEvaluation.riskScore,
       identity_check: identityCheck,
+      commercial_check: commercialCheck,
       sanctions_check: sanctionsCheck,
       litigation_check: litigationCheck,
     };
@@ -205,6 +216,7 @@ export class CreditService {
       raw_payload: {
         identity_source: company.rawPayload,
         identity_check: identityCheck,
+        commercial_check: commercialCheck,
         sanctions_check: sanctionsCheck,
         litigation_check: litigationCheck,
       },
@@ -375,6 +387,7 @@ export class CreditService {
 
   private async runLitigationCheck(
     companyName: string,
+    companyState: string | null,
   ): Promise<LitigationCheck> {
     const searchUrl = new URL('https://www.courtlistener.com/api/rest/v4/search/');
     searchUrl.searchParams.set('type', 'r');
@@ -445,11 +458,40 @@ export class CreditService {
       source_url: 'https://www.courtlistener.com/api/rest/v4/search/',
       case_count: topCases.length,
       recent_case_count: recentCaseCount,
+      google_state_search_url: this.buildGoogleSearchUrl(
+        this.buildStateCourtQuery(companyName, companyState),
+      ),
+      google_federal_search_url: this.buildGoogleSearchUrl(
+        `${companyName} lawsuit federal court`,
+      ),
       top_cases: topCases.slice(0, 3),
       summary:
         topCases.length === 0
           ? 'No relevant public litigation results were found in CourtListener.'
           : `CourtListener returned ${topCases.length} relevant public litigation result${topCases.length === 1 ? '' : 's'}, including ${recentCaseCount} filed within the last three years.`,
+    };
+  }
+
+  private buildCommercialCheck(
+    companyName: string,
+    companyState: string | null,
+  ): CommercialCheck {
+    const searchUrl = new URL('https://opencorporates.com/companies');
+    searchUrl.searchParams.set('q', companyName);
+    searchUrl.searchParams.set('type', 'companies');
+    if (companyState) {
+      const jurisdictionCode = this.toOpenCorporatesJurisdictionCode(companyState);
+      if (jurisdictionCode) {
+        searchUrl.searchParams.set('jurisdiction_code', jurisdictionCode);
+      }
+    }
+
+    return {
+      status: 'LINK_READY',
+      source_name: 'OpenCorporates',
+      source_url: searchUrl.toString(),
+      summary:
+        'OpenCorporates commercial-credit search link is ready. The site currently uses bot protection, so this layer opens as a manual business-credit review shortcut rather than a fully automated scrape.',
     };
   }
 
@@ -507,7 +549,12 @@ export class CreditService {
         return this.lookupCaliforniaCompany(companyName);
       }
 
-      return null;
+      throw new BadRequestException({
+        success: false,
+        error_code: 'CALIFORNIA_SOS_PENDING',
+        message:
+          'California private-company lookup is waiting for official California SOS API approval',
+      });
     }
 
     if (companyState === 'DE') {
@@ -1769,6 +1816,47 @@ export class CreditService {
     } catch {
       return null;
     }
+  }
+
+  private buildGoogleSearchUrl(query: string) {
+    const url = new URL('https://www.google.com/search');
+    url.searchParams.set('q', query);
+    return url.toString();
+  }
+
+  private stateSearchTerm(companyState: string | null) {
+    if (!companyState) return 'state';
+
+    const stateMap: Record<string, string> = {
+      CA: 'california',
+      DE: 'delaware',
+      TX: 'texas',
+      NY: 'new york',
+      FL: 'florida',
+    };
+
+    return stateMap[companyState] ?? 'state';
+  }
+
+  private buildStateCourtQuery(companyName: string, companyState: string | null) {
+    const stateTerm = this.stateSearchTerm(companyState);
+    if (stateTerm === 'state') {
+      return `${companyName} lawsuit state court`;
+    }
+
+    return `${companyName} lawsuit ${stateTerm} state court`;
+  }
+
+  private toOpenCorporatesJurisdictionCode(companyState: string) {
+    const jurisdictionMap: Record<string, string> = {
+      CA: 'us_ca',
+      DE: 'us_de',
+      TX: 'us_tx',
+      NY: 'us_ny',
+      FL: 'us_fl',
+    };
+
+    return jurisdictionMap[companyState] ?? '';
   }
 
   private normalizeWebsite(urlValue: string | null) {

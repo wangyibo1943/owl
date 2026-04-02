@@ -105,15 +105,15 @@ class AppCopy {
   String get chinese => '中文';
   String get english => 'English';
   String get creditHeroTitle =>
-      isChinese ? '美国买家交易风险查询' : 'US Buyer Transaction Risk Check';
+      isChinese ? '加州买家交易风险查询' : 'California Buyer Transaction Risk Check';
   String get creditHeroBody => isChinese
-      ? '连接 TradeGuard 实时后端，一次返回主体核验、制裁筛查和司法风险结果，帮助你在发货前先看清对方。'
-      : 'Run one live buyer risk lookup and get identity, sanctions, and litigation signals before you ship.';
+      ? '当前默认按加州公司核验，一次返回主体核验、制裁筛查和司法风险结果；加州官方通道放开后会直接补齐私营公司注册信息。'
+      : 'The app now prioritizes California buyers and returns identity, sanctions, and litigation signals in one lookup. Private-company registry depth will expand as soon as official California access is approved.';
   String get lookupInput => isChinese ? '查询条件' : 'Lookup Input';
   String get companyName => isChinese ? '公司名称' : 'Company name';
   String get website => isChinese ? '官网' : 'Website';
   String get websiteHint => isChinese ? 'example.com' : 'example.com';
-  String get stateRegistryHint => isChinese ? '州注册提示' : 'State registry hint';
+  String get stateRegistryHint => isChinese ? '注册州' : 'Registration state';
   String get auto => isChinese ? '自动' : 'Auto';
   String get california => isChinese ? '加州' : 'California';
   String get checking => isChinese ? '查询中...' : 'Checking...';
@@ -169,13 +169,20 @@ class AppCopy {
   String get score => isChinese ? '评分' : 'Score';
   String get confidence => isChinese ? '置信度' : 'Confidence';
   String get source => isChinese ? '来源' : 'Source';
-  String get identityCheck => isChinese ? '主体核验' : 'Identity Check';
+  String get identityCheck => isChinese ? '州注册核验' : 'State Registry';
+  String get commercialCheck => isChinese ? '商业信用' : 'Business Credit';
   String get sanctionsCheck => isChinese ? '制裁筛查' : 'Sanctions Check';
-  String get litigationCheck => isChinese ? '司法风险' : 'Litigation Check';
+  String get litigationCheck => isChinese ? '法院诉讼' : 'Court & Lawsuits';
   String get screeningStatus => isChinese ? '筛查状态' : 'Screening Status';
   String get caseCount => isChinese ? '案件数' : 'Case Count';
   String get recentCases => isChinese ? '近三年案件' : 'Recent Cases';
   String get potentialMatches => isChinese ? '潜在命中' : 'Potential Matches';
+  String get openCommercialSearch =>
+      isChinese ? '打开 OpenCorporates' : 'Open OpenCorporates';
+  String get openStateCourtSearch =>
+      isChinese ? '搜州法院' : 'Search State Courts';
+  String get openFederalCourtSearch =>
+      isChinese ? '搜联邦法院' : 'Search Federal Courts';
   String get verified => isChinese ? '已核验' : 'Verified';
   String get reviewRequired => isChinese ? '需要复核' : 'Review Required';
   String get clear => isChinese ? '未见异常' : 'Clear';
@@ -193,6 +200,9 @@ class AppCopy {
   String get notAvailable => isChinese ? '暂无' : 'N/A';
   String get requestFailed => isChinese ? '请求失败' : 'Request failed';
   String get companyNotFound => isChinese ? '未找到该公司' : 'Company was not found';
+  String get californiaPending => isChinese
+      ? '加州私营公司官方查询通道还在等待州务卿开放，当前先完成了加州优先模式。'
+      : 'California private-company lookup is waiting for official California SOS access.';
   String get unsupportedState => isChinese
       ? '当前 MVP 私营公司州注册查询支持加州、特拉华和德州'
       : 'Private-company registry lookup currently supports California, Delaware, and Texas in this MVP';
@@ -269,6 +279,7 @@ class AppCopy {
         'MATCHED' => matched,
         'ELEVATED' => elevated,
         'HIGH' => high,
+        'LINK_READY' => isChinese ? '可打开' : 'Open',
         _ => value,
       };
 }
@@ -276,6 +287,12 @@ class AppCopy {
 String _mapErrorMessage(BuildContext context, Object error) {
   final copy = context.copy;
   final message = '$error';
+  if (message.contains('CALIFORNIA_SOS_PENDING') ||
+      message.contains(
+        'California private-company lookup is waiting for official California SOS API approval',
+      )) {
+    return copy.californiaPending;
+  }
   if (message.contains('Company was not found')) return copy.companyNotFound;
   if (message.contains('UNSUPPORTED_STATE') ||
       message.contains(
@@ -367,9 +384,9 @@ class CreditCheckScreen extends StatefulWidget {
 }
 
 class _CreditCheckScreenState extends State<CreditCheckScreen> {
-  final _companyController = TextEditingController(text: 'Apple Inc.');
-  final _websiteController = TextEditingController(text: 'apple.com');
-  String _selectedState = '';
+  final _companyController = TextEditingController();
+  final _websiteController = TextEditingController();
+  String _selectedState = 'CA';
   bool _isLoading = false;
   String? _error;
   CreditLookupResult? _result;
@@ -906,33 +923,28 @@ class _CreditResultCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _CheckSectionCard(
-              title: copy.sanctionsCheck,
-              tone: result.sanctionsCheck.tone,
-              summary: result.sanctionsCheck.summary,
+              title: copy.commercialCheck,
+              tone: result.commercialCheck.tone,
+              summary: result.commercialCheck.summary,
               metrics: [
                 _SectionMetric(
                   copy.screeningStatus,
-                  copy.screeningStatusLabel(result.sanctionsCheck.status),
+                  result.commercialCheck.status,
                 ),
-                _SectionMetric(
-                  copy.potentialMatches,
-                  '${result.sanctionsCheck.matchCount}',
-                ),
-                _SectionMetric(copy.source, result.sanctionsCheck.sourceName),
+                _SectionMetric(copy.source, result.commercialCheck.sourceName),
               ],
-              extra: result.sanctionsCheck.topMatches.isEmpty
+              extra: result.commercialCheck.sourceUrl.isEmpty
                   ? null
-                  : Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: result.sanctionsCheck.topMatches
-                          .map(
-                            (item) => Chip(
-                              label: Text(item.name),
-                              backgroundColor: const Color(0xFFF5F7F4),
-                            ),
-                          )
-                          .toList(),
+                  : Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: () => launchUrl(
+                          Uri.parse(result.commercialCheck.sourceUrl),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        icon: const Icon(Icons.open_in_new),
+                        label: Text(copy.openCommercialSearch),
+                      ),
                     ),
             ),
             const SizedBox(height: 14),
@@ -955,9 +967,38 @@ class _CreditResultCard extends StatelessWidget {
                 ),
                 _SectionMetric(copy.source, result.litigationCheck.sourceName),
               ],
-              extra: result.litigationCheck.topCases.isEmpty
-                  ? null
-                  : Column(
+              extra: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      if (result.litigationCheck.googleStateSearchUrl.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => launchUrl(
+                            Uri.parse(result.litigationCheck.googleStateSearchUrl),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: const Icon(Icons.open_in_new),
+                          label: Text(copy.openStateCourtSearch),
+                        ),
+                      if (result.litigationCheck.googleFederalSearchUrl.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => launchUrl(
+                            Uri.parse(
+                              result.litigationCheck.googleFederalSearchUrl,
+                            ),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                          icon: const Icon(Icons.open_in_new),
+                          label: Text(copy.openFederalCourtSearch),
+                        ),
+                    ],
+                  ),
+                  if (result.litigationCheck.topCases.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Column(
                       children: result.litigationCheck.topCases
                           .map(
                             (item) => Padding(
@@ -969,6 +1010,9 @@ class _CreditResultCard extends StatelessWidget {
                             ),
                           )
                           .toList(),
+                    ),
+                  ],
+                ],
                     ),
             ),
             const SizedBox(height: 16),
@@ -1536,6 +1580,7 @@ class CreditLookupResult {
     required this.summary,
     required this.websiteMatch,
     required this.identityCheck,
+    required this.commercialCheck,
     required this.sanctionsCheck,
     required this.litigationCheck,
     this.ticker,
@@ -1560,6 +1605,7 @@ class CreditLookupResult {
   final String summary;
   final String websiteMatch;
   final IdentityCheckResult identityCheck;
+  final CommercialCheckResult commercialCheck;
   final SanctionsCheckResult sanctionsCheck;
   final LitigationCheckResult litigationCheck;
   final String? lastFilingDate;
@@ -1585,6 +1631,11 @@ class CreditLookupResult {
       identityCheck: IdentityCheckResult.fromJson(
         Map<String, dynamic>.from(
           (json['identity_check'] as Map?) ?? const <String, dynamic>{},
+        ),
+      ),
+      commercialCheck: CommercialCheckResult.fromJson(
+        Map<String, dynamic>.from(
+          (json['commercial_check'] as Map?) ?? const <String, dynamic>{},
         ),
       ),
       sanctionsCheck: SanctionsCheckResult.fromJson(
@@ -1633,6 +1684,34 @@ class CreditLookupResult {
 
   String riskToneTitle(BuildContext context) =>
       context.copy.gradeRiskTitle(creditGrade);
+}
+
+class CommercialCheckResult {
+  CommercialCheckResult({
+    required this.status,
+    required this.sourceName,
+    required this.sourceUrl,
+    required this.summary,
+  });
+
+  final String status;
+  final String sourceName;
+  final String sourceUrl;
+  final String summary;
+
+  factory CommercialCheckResult.fromJson(Map<String, dynamic> json) {
+    return CommercialCheckResult(
+      status: json['status'] as String? ?? 'LINK_READY',
+      sourceName: json['source_name'] as String? ?? 'OpenCorporates',
+      sourceUrl: json['source_url'] as String? ?? '',
+      summary: json['summary'] as String? ?? '',
+    );
+  }
+
+  StatusTone get tone => const StatusTone(
+        background: Color(0xFFE8F3F0),
+        foreground: Color(0xFF0F766E),
+      );
 }
 
 class IdentityCheckResult {
@@ -1742,6 +1821,8 @@ class LitigationCheckResult {
     required this.sourceName,
     required this.caseCount,
     required this.recentCaseCount,
+    required this.googleStateSearchUrl,
+    required this.googleFederalSearchUrl,
     required this.summary,
     required this.topCases,
   });
@@ -1750,6 +1831,8 @@ class LitigationCheckResult {
   final String sourceName;
   final int caseCount;
   final int recentCaseCount;
+  final String googleStateSearchUrl;
+  final String googleFederalSearchUrl;
   final String summary;
   final List<LitigationCaseResult> topCases;
 
@@ -1759,6 +1842,9 @@ class LitigationCheckResult {
       sourceName: json['source_name'] as String? ?? 'CourtListener',
       caseCount: (json['case_count'] as num?)?.toInt() ?? 0,
       recentCaseCount: (json['recent_case_count'] as num?)?.toInt() ?? 0,
+      googleStateSearchUrl: json['google_state_search_url'] as String? ?? '',
+      googleFederalSearchUrl:
+          json['google_federal_search_url'] as String? ?? '',
       summary: json['summary'] as String? ?? '',
       topCases: (json['top_cases'] as List<dynamic>? ?? const [])
           .map((item) => LitigationCaseResult.fromJson(Map<String, dynamic>.from(item as Map)))
